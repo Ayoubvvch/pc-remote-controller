@@ -5,10 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
@@ -21,7 +23,10 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.File
 import java.io.IOException
+import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 
 class RemoteService : Service() {
@@ -29,6 +34,7 @@ class RemoteService : Service() {
     companion object {
         const val CHANNEL_ID = "pc_remote_bg_service"
         const val NOTIFICATION_ID = 1001
+        const val ACTION_CLIPBOARD_NOTIFY = "com.remote.pccontroller.CLIPBOARD_NOTIFY"
         private const val TAG = "RemoteService"
     }
 
@@ -36,6 +42,9 @@ class RemoteService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var lastKnownText: String = ""
     private var lastPcClipVersion: Int = 0
+
+    private var watcherProcess: Process? = null
+    private var isRootWatcherActive = false
 
     private val longPollClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -51,7 +60,20 @@ class RemoteService : Service() {
 
     private var clipboardManager: ClipboardManager? = null
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
-        handleLocalClipboardChanged()
+        if (!isRootWatcherActive) {
+            handleLocalClipboardChanged()
+        }
+    }
+
+    private val notifyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_CLIPBOARD_NOTIFY) {
+                val message = intent.getStringExtra("message") ?: return
+                mainHandler.post {
+                    Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     override fun onCreate() {
@@ -63,13 +85,29 @@ class RemoteService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Error registering clip listener", e)
         }
+
+        // Register broadcast receiver for toast feedback from daemon
+        try {
+            val filter = IntentFilter(ACTION_CLIPBOARD_NOTIFY)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(notifyReceiver, filter, RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(notifyReceiver, filter)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering notify receiver", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val prefs = getSharedPreferences("pc_remote_prefs", Context.MODE_PRIVATE)
         val ip = prefs.getString("pc_ip", "192.168.11.109") ?: "192.168.11.109"
+        val port = prefs.getString("pc_port", "5050") ?: "5050"
 
-        val notification = buildNotification("🟢 PcConnected - متصل بالحاسوب", "مزامنة الحافظة والتحكم بالخلفية نشطة ($ip)")
+        val notification = buildNotification(
+            "🟢 PcConnected - متصل بالحاسوب",
+            "مزامنة الحافظة الفورية والتحكم بالخلفية نشطة ($ip:$port)"
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -78,10 +116,95 @@ class RemoteService : Service() {
 
         if (!isRunning) {
             isRunning = true
-            startPcClipboardLongPoll()
+
+            // Try to launch root background clipboard watcher
+            if (RootUtil.isRootAvailable()) {
+                startRootClipboardWatcher(ip, port)
+                startWatcherWatchdog(ip, port)
+            } else {
+                // Fallback to in-app long poll if root is unavailable
+                startPcClipboardLongPoll()
+            }
         }
 
         return START_STICKY
+    }
+
+    private fun startRootClipboardWatcher(ip: String, port: String) {
+        Thread {
+            try {
+                ensureAndroidEnvScript()
+
+                val apkPath = applicationInfo.sourceDir
+                Log.i(TAG, "Starting ClipboardWatcher daemon with apk: $apkPath")
+
+                // Kill any previous instance first
+                RootUtil.executeSu("pkill -9 -f com.remote.pccontroller.ClipboardWatcher")
+
+                val cmd = ". /data/local/tmp/android_env.sh; " +
+                        "export CLASSPATH=$apkPath; " +
+                        "exec /system/bin/app_process /system/bin com.remote.pccontroller.ClipboardWatcher $ip $port"
+
+                val suPath = if (File("/product/bin/su").exists()) "/product/bin/su" else "su"
+                val process = Runtime.getRuntime().exec(arrayOf(suPath, "-c", cmd))
+                watcherProcess = process
+                isRootWatcherActive = true
+
+                Log.i(TAG, "ClipboardWatcher daemon launched successfully as root")
+
+                // Read daemon output in background
+                BufferedReader(InputStreamReader(process.inputStream)).forEachLine { line ->
+                    Log.d("ClipboardWatcher", line)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error starting ClipboardWatcher daemon: ${e.message}", e)
+                isRootWatcherActive = false
+                // Fallback to in-app poll
+                startPcClipboardLongPoll()
+            }
+        }.start()
+    }
+
+    private fun startWatcherWatchdog(ip: String, port: String) {
+        Thread {
+            while (isRunning) {
+                try {
+                    Thread.sleep(10000)
+                    if (isRunning && RootUtil.isRootAvailable()) {
+                        val proc = watcherProcess
+                        val isAlive = proc != null && try {
+                            proc.exitValue()
+                            false // Exited
+                        } catch (e: IllegalThreadStateException) {
+                            true // Still running
+                        }
+
+                        if (!isAlive) {
+                            Log.w(TAG, "ClipboardWatcher died, restarting daemon...")
+                            startRootClipboardWatcher(ip, port)
+                        }
+                    }
+                } catch (ignored: Exception) {
+                }
+            }
+        }.start()
+    }
+
+    private fun ensureAndroidEnvScript() {
+        val check = File("/data/local/tmp/android_env.sh")
+        if (!check.exists()) {
+            val script = """
+                export ANDROID_ROOT=/system
+                export ANDROID_DATA=/data
+                export ANDROID_ART_ROOT=/apex/com.android.art
+                export ANDROID_I18N_ROOT=/apex/com.android.i18n
+                export ANDROID_TZDATA_ROOT=/apex/com.android.tzdata
+                export PATH=/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/system_ext/bin:/system/bin:/system/xbin:${'$'}PATH
+                export BOOTCLASSPATH='/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/framework-location.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/mediatek-common.jar:/system/framework/mediatek-framework.jar:/system/framework/mediatek-ims-base.jar:/system/framework/mediatek-ims-common.jar:/system/framework/mediatek-telecom-common.jar:/system/framework/mediatek-telephony-base.jar:/system/framework/mediatek-telephony-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar'
+                export DEX2OATBOOTCLASSPATH='/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/framework-location.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/mediatek-common.jar:/system/framework/mediatek-framework.jar:/system/framework/mediatek-ims-base.jar:/system/framework/mediatek-ims-common.jar:/system/framework/mediatek-telecom-common.jar:/system/framework/mediatek-telephony-base.jar:/system/framework/mediatek-telephony-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar'
+            """.trimIndent()
+            RootUtil.executeSu("echo '$script' > /data/local/tmp/android_env.sh && chmod 777 /data/local/tmp/android_env.sh")
+        }
     }
 
     private fun buildNotification(title: String, text: String): Notification {
@@ -93,7 +216,7 @@ class RemoteService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Action 1: Send phone clipboard to PC
+        // Action 1: Send phone clipboard to PC (manual fallback trigger)
         val sendClipIntent = Intent(this, TransparentClipActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -133,14 +256,9 @@ class RemoteService : Service() {
             .build()
     }
 
-    private fun updateNotification(title: String, text: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(title, text))
-    }
-
     private fun startPcClipboardLongPoll() {
         Thread {
-            while (isRunning) {
+            while (isRunning && !isRootWatcherActive) {
                 val prefs = getSharedPreferences("pc_remote_prefs", Context.MODE_PRIVATE)
                 val ip = prefs.getString("pc_ip", "192.168.11.109") ?: "192.168.11.109"
                 val port = prefs.getString("pc_port", "5050") ?: "5050"
@@ -172,7 +290,6 @@ class RemoteService : Service() {
                         Thread.sleep(3000)
                     }
                 } catch (e: Exception) {
-                    // Server might be sleeping or unreachable
                     try {
                         Thread.sleep(3000)
                     } catch (ignored: Exception) {
@@ -255,10 +372,20 @@ class RemoteService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        isRootWatcherActive = false
         try {
             clipboardManager?.removePrimaryClipChangedListener(clipListener)
         } catch (ignored: Exception) {
         }
+        try {
+            unregisterReceiver(notifyReceiver)
+        } catch (ignored: Exception) {
+        }
+        try {
+            watcherProcess?.destroy()
+        } catch (ignored: Exception) {
+        }
+        RootUtil.executeSu("pkill -9 -f com.remote.pccontroller.ClipboardWatcher")
         super.onDestroy()
     }
 

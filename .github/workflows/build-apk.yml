@@ -31,37 +31,28 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Rename APK for release
-        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.5.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.6.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PCRemote-APK
-          path: PCRemote-v1.5.apk
+          path: PCRemote-v1.6.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.5.0
-          name: "PC Remote App v1.5.0"
+          tag_name: v1.6.0
+          name: "PC Remote App v1.6.0"
           body: |
-            ### 🚀 PC Remote Control Android App (Release v1.5.0)
-            - 🔄 **مزامنة الحافظة الفورية والاحترافية (Bidirectional Clipboard Sync):**
-              - ما يتم نسخه على الحاسوب (Ctrl+C) يتم نسخه فوراً إلى حافظة الهاتف في أجزاء من الثانية!
-              - ما يتم نسخه على الهاتف يمكن إرساله ومزامنته مع الحاسوب فوراً وبسلاسة تامة.
-            - 🛡️ **استغلال صلاحيات الروت التلقائية (Magisk Root Integration):**
-              - التطبيق يمنح نفسه كافة الصلاحيات اللازمة (الإشعارات الدائمة، قراءة الحافظة، النوافذ العائمة، واستثناء توفير الطاقة) تلقائياً عبر الروت دون الحاجة لأي تدخل يدوي من المستخدم!
-            - 🟢 **خدمة دائمة في الخلفية مع إشعار مستمر (Persistent PcConnected Background Service):**
-              - إشعار دائم "🟢 PcConnected - متصل بالحاسوب" يبقي التطبيق حياً ولا يتم إغلاقه بواسطة النظام أبداً.
-              - أزرار سريعة ومباشرة من الإشعار:
-                - 📋 إرسال الحافظة للحاسوب بضغطة واحدة من أي تطبيق!
-                - 📸 التقاط لقطة لجميع شاشات الحاسوب فوراً!
-                - ⏹️ إيقاف الخدمة عند الرغبة.
-            - 📲 **استمرار دعم كافة الميزات السابقة:**
-              - المشاركة المباشرة (Share Sheet) للملفات والصور.
-              - متصفح وسحب ملفات الحاسوب (PC File Explorer).
-              - تصوير الشاشات المتعددة والتحكم بالصوت ومقاطع الميديا وأوامر السكون المجدولة.
-          files: PCRemote-v1.5.apk
+            ### 🚀 PC Remote Control Android App (Release v1.6.0)
+            - ⚡ **مزامنة الحافظة الفورية في الخلفية بنظام الروت (Precision Background Clipboard Sync):**
+              - مزامنة فورية وتلقائية بالكامل بين الحاسوب والهاتف عند خروجك من التطبيق وتصفح أي تطبيق آخر!
+              - تشغيل ديمون خفيف عالي الدقة (ClipboardWatcher) بصلاحيات الروت/Shell لمراقبة وتحديث الحافظة في أجزاء من الثانية دون قيود النظام على الخلفية.
+              - نسخ أي نص في أي تطبيق على الهاتف يرسله فوراً لحافظة الويندوز، ونسخ أي نص على الويندوز يحدّث حافظة الهاتف فوراً وبلا أي تكرار.
+            - 🟢 **خدمة دائمة في الخلفية وإشعار مستمر (PcConnected):**
+              - حماية الخدمة من الإغلاق والقتل بواسطة إدارة الطاقة في النظام.
+          files: PCRemote-v1.6.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
