@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.OpenableColumns
 import android.util.Base64
 import android.view.LayoutInflater
@@ -18,6 +19,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -29,8 +31,12 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -40,7 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: SharedPreferences
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
@@ -50,6 +56,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etCommand: EditText
     private lateinit var btnSend: ImageButton
     private lateinit var btnAttach: ImageButton
+    private lateinit var btnBrowseFiles: ImageButton
     private lateinit var btnSettings: ImageButton
     private lateinit var btnRefresh: ImageButton
     private lateinit var tvConnectionStatus: TextView
@@ -74,6 +81,7 @@ class MainActivity : AppCompatActivity() {
         etCommand = findViewById(R.id.etCommand)
         btnSend = findViewById(R.id.btnSend)
         btnAttach = findViewById(R.id.btnAttach)
+        btnBrowseFiles = findViewById(R.id.btnBrowseFiles)
         btnSettings = findViewById(R.id.btnSettings)
         btnRefresh = findViewById(R.id.btnRefresh)
         tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
@@ -90,8 +98,9 @@ class MainActivity : AppCompatActivity() {
         // Welcome message
         addPcMessage(
             "👋 مرحباً بك في لوحة تحكم الحاسوب!\n" +
-            "• يمكنك التقاط شاشة الحاسوب عبر أمر 'screenshot' أو زر 📸 بالأعلى.\n" +
-            "• يمكنك إرسال أي صورة أو ملف لحفظها في Downloads عبر زر 📎."
+            "• 📁 لتصفح وسحب ملفات الحاسوب: اضغط زر المجلد بالأعلى.\n" +
+            "• 📸 لتصوير الشاشة: يدعم الشاشتين معاً، أو شاشة 1 أو 2.\n" +
+            "• 📎 لإرسال ملفات للحاسوب: اضغط زر المشبك بجانب الكتابة."
         )
 
         // Button listeners
@@ -105,6 +114,10 @@ class MainActivity : AppCompatActivity() {
 
         btnAttach.setOnClickListener {
             filePickerLauncher.launch("*/*")
+        }
+
+        btnBrowseFiles.setOnClickListener {
+            showFileBrowserDialog()
         }
 
         etCommand.setOnEditorActionListener { _, actionId, _ ->
@@ -127,7 +140,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupQuickChips() {
-        findViewById<TextView>(R.id.chipScreenshot)?.setOnClickListener { sendCommand("screenshot") }
+        findViewById<TextView>(R.id.chipBrowseFiles)?.setOnClickListener { showFileBrowserDialog() }
+        findViewById<TextView>(R.id.chipScreenshotAll)?.setOnClickListener { sendCommand("screenshot all") }
+        findViewById<TextView>(R.id.chipScreenshot1)?.setOnClickListener { sendCommand("screenshot 1") }
+        findViewById<TextView>(R.id.chipScreenshot2)?.setOnClickListener { sendCommand("screenshot 2") }
         findViewById<TextView>(R.id.chipMessi)?.setOnClickListener { sendCommand("messi") }
         findViewById<TextView>(R.id.chipRain)?.setOnClickListener { sendCommand("sleep rain 15min") }
         findViewById<TextView>(R.id.chipRainMin)?.setOnClickListener { sendCommand("sleep rain 15m min") }
@@ -363,6 +379,235 @@ class MainActivity : AppCompatActivity() {
         })
 
         dialog.show()
+    }
+
+    // ==========================================
+    // PC File Explorer & Downloader
+    // ==========================================
+    private fun showFileBrowserDialog() {
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.setContentView(R.layout.dialog_file_browser)
+
+        val btnBackFolder = dialog.findViewById<ImageButton>(R.id.btnBackFolder)
+        val btnCloseBrowser = dialog.findViewById<ImageButton>(R.id.btnCloseBrowser)
+        val tvCurrentPath = dialog.findViewById<TextView>(R.id.tvCurrentPath)
+        val layoutShortcuts = dialog.findViewById<LinearLayout>(R.id.layoutShortcuts)
+        val rvPcFiles = dialog.findViewById<RecyclerView>(R.id.rvPcFiles)
+        val pbBrowserLoading = dialog.findViewById<ProgressBar>(R.id.pbBrowserLoading)
+        val tvEmptyFiles = dialog.findViewById<TextView>(R.id.tvEmptyFiles)
+
+        rvPcFiles.layoutManager = LinearLayoutManager(this)
+
+        var currentFolder = ""
+        var parentFolder: String? = null
+        val fileList = mutableListOf<PcFileItem>()
+        lateinit var loadFolder: (String?) -> Unit
+
+        val fileAdapter = PcFileAdapter(
+            items = fileList,
+            onItemClick = { item ->
+                if (item.isDirectory) {
+                    loadFolder(item.path)
+                } else {
+                    downloadFileFromPc(item)
+                }
+            },
+            onDownloadClick = { item ->
+                downloadFileFromPc(item)
+            }
+        )
+        rvPcFiles.adapter = fileAdapter
+
+        loadFolder = { folderPath: String? ->
+            pbBrowserLoading.visibility = View.VISIBLE
+            tvEmptyFiles.visibility = View.GONE
+            val baseUrl = getBaseUrl()
+            val encoded = if (!folderPath.isNullOrEmpty()) URLEncoder.encode(folderPath, "UTF-8") else ""
+            val url = "$baseUrl/api/browse" + if (encoded.isNotEmpty()) "?path=$encoded" else ""
+
+            val req = Request.Builder().url(url).build()
+            client.newCall(req).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    runOnUiThread {
+                        pbBrowserLoading.visibility = View.GONE
+                        Toast.makeText(this@MainActivity, "تعذر تحميل المجلد: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    val body = response.body?.string() ?: ""
+                    try {
+                        val json = JSONObject(body)
+                        if (json.optString("status") == "success") {
+                            currentFolder = json.optString("current_path")
+                            parentFolder = if (json.has("parent_path") && !json.isNull("parent_path")) json.optString("parent_path") else null
+
+                            val foldersJson = json.optJSONArray("folders") ?: JSONArray()
+                            val filesJson = json.optJSONArray("files") ?: JSONArray()
+                            val shortcutsJson = json.optJSONArray("shortcuts") ?: JSONArray()
+                            val drivesJson = json.optJSONArray("drives") ?: JSONArray()
+
+                            val newItems = mutableListOf<PcFileItem>()
+                            for (i in 0 until foldersJson.length()) {
+                                val f = foldersJson.getJSONObject(i)
+                                newItems.add(
+                                    PcFileItem(
+                                        name = f.getString("name"),
+                                        path = f.getString("path"),
+                                        isDirectory = true
+                                    )
+                                )
+                            }
+                            for (i in 0 until filesJson.length()) {
+                                val f = filesJson.getJSONObject(i)
+                                newItems.add(
+                                    PcFileItem(
+                                        name = f.getString("name"),
+                                        path = f.getString("path"),
+                                        isDirectory = false,
+                                        sizeStr = f.optString("size_str", ""),
+                                        sizeBytes = f.optLong("size", 0),
+                                        ext = f.optString("ext", "")
+                                    )
+                                )
+                            }
+
+                            runOnUiThread {
+                                pbBrowserLoading.visibility = View.GONE
+                                tvCurrentPath.text = currentFolder
+                                btnBackFolder.isEnabled = !parentFolder.isNullOrEmpty()
+                                btnBackFolder.alpha = if (!parentFolder.isNullOrEmpty()) 1.0f else 0.3f
+
+                                fileList.clear()
+                                fileList.addAll(newItems)
+                                fileAdapter.notifyDataSetChanged()
+                                tvEmptyFiles.visibility = if (newItems.isEmpty()) View.VISIBLE else View.GONE
+
+                                // Populate shortcuts and drives
+                                layoutShortcuts.removeAllViews()
+                                for (i in 0 until shortcutsJson.length()) {
+                                    val s = shortcutsJson.getJSONObject(i)
+                                    val chip = createShortcutChip(s.getString("name"), s.optString("icon", "📁")) {
+                                        loadFolder(s.getString("path"))
+                                    }
+                                    layoutShortcuts.addView(chip)
+                                }
+                                for (i in 0 until drivesJson.length()) {
+                                    val d = drivesJson.getString(i)
+                                    val chip = createShortcutChip(d, "💾") {
+                                        loadFolder(d)
+                                    }
+                                    layoutShortcuts.addView(chip)
+                                }
+                            }
+                            return
+                        }
+                    } catch (ex: Exception) {
+                        ex.printStackTrace()
+                    }
+                    runOnUiThread {
+                        pbBrowserLoading.visibility = View.GONE
+                    }
+                }
+            })
+        }
+
+        btnBackFolder.setOnClickListener {
+            if (!parentFolder.isNullOrEmpty()) {
+                loadFolder(parentFolder)
+            }
+        }
+        btnCloseBrowser.setOnClickListener { dialog.dismiss() }
+
+        loadFolder(null)
+        dialog.show()
+    }
+
+    private fun createShortcutChip(title: String, icon: String, onClick: () -> Unit): TextView {
+        val tv = TextView(this).apply {
+            text = "$icon $title"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setBackgroundResource(R.drawable.bg_chip)
+            setPadding(28, 14, 28, 14)
+            isClickable = true
+            isFocusable = true
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = 16
+            }
+            layoutParams = params
+            setOnClickListener { onClick() }
+        }
+        return tv
+    }
+
+    private fun downloadFileFromPc(item: PcFileItem) {
+        Toast.makeText(this, "⏳ جاري سحب ${item.name} (${item.sizeStr})...", Toast.LENGTH_SHORT).show()
+        val baseUrl = getBaseUrl()
+        val encoded = URLEncoder.encode(item.path, "UTF-8")
+        val url = "$baseUrl/api/download?path=$encoded"
+
+        val req = Request.Builder().url(url).build()
+        client.newCall(req).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "❌ فشل سحب الملف: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    try {
+                        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                        if (!downloadsDir.exists()) downloadsDir.mkdirs()
+
+                        var targetFile = File(downloadsDir, item.name)
+                        var counter = 1
+                        val nameWithoutExt = targetFile.nameWithoutExtension
+                        val ext = targetFile.extension
+                        while (targetFile.exists()) {
+                            val newName = if (ext.isNotEmpty()) "$nameWithoutExt ($counter).$ext" else "$nameWithoutExt ($counter)"
+                            targetFile = File(downloadsDir, newName)
+                            counter++
+                        }
+
+                        response.body?.byteStream()?.use { input ->
+                            FileOutputStream(targetFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // Notify MediaScanner so file appears in Android Downloads app immediately
+                        android.media.MediaScannerConnection.scanFile(
+                            this@MainActivity,
+                            arrayOf(targetFile.absolutePath),
+                            null,
+                            null
+                        )
+
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "✅ تم حفظ ${targetFile.name} في مجلد Download بنجاح!", Toast.LENGTH_LONG).show()
+                            addPcMessage(
+                                "📥 تم سحب الملف من الحاسوب بنجاح!\n" +
+                                "📁 اسم الملف: ${targetFile.name}\n" +
+                                "💾 الحجم: ${item.sizeStr}\n" +
+                                "📍 تم الحفظ في: Download/${targetFile.name}"
+                            )
+                        }
+                        return
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "❌ فشل حفظ الملف", Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
     }
 
     private fun formatFileSize(bytes: Long): String {

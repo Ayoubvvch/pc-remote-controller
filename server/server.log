@@ -161,3 +161,31 @@ Ready to receive commands from your Android app!
 [13:43:22] POST /upload HTTP/1.1 - 200 -
 [UPLOAD] Saved 'test_doc (1).txt' (57 B) to C:\Users\chyad\Downloads
 [13:43:55] POST /upload HTTP/1.1 - 200 -
+[UPLOAD] Saved 'phone_test.txt' (21 B) to C:\Users\chyad\Downloads
+[14:02:26] POST /upload HTTP/1.1 - 200 -
+[RECV] Command: '{" \\command\\\:\\\screenshot\\\}' from 192.168.11.233
+[14:03:34] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'screenshot' from 192.168.11.233
+[14:03:52] POST /command HTTP/1.1 - 200 -
+[14:04:26] GET /ping HTTP/1.1 - 200 -
+[14:05:11] GET /ping HTTP/1.1 - 200 -
+[RECV] Command: 'screenshot' from 192.168.11.233
+[14:05:20] POST /command HTTP/1.1 - 200 -
+[14:05:20] GET /screenshot/ss_1791554720.jpg HTTP/1.1 - 200 -
+[14:05:22] GET /screenshot/ss_1791554720.jpg HTTP/1.1 - 200 -
+[14:05:24] GET /screenshot/ss_1791554720.jpg HTTP/1.1 - 200 -
+[14:05:26] GET /screenshot/ss_1791554720.jpg HTTP/1.1 - 200 -
+[14:05:30] GET /screenshot/ss_1791554720.jpg HTTP/1.1 - 200 -
+[UPLOAD] Saved 'It really is.mp4' (1.8 MB) to C:\Users\chyad\Downloads
+[14:05:48] POST /upload HTTP/1.1 - 200 -
+[14:07:59] GET /screenshot/ss_1791554720.jpg HTTP/1.1 - 200 -
+[RECV] Command: 'screenshot' from 192.168.11.233
+[14:08:49] POST /command HTTP/1.1 - 200 -
+[14:08:49] GET /screenshot/ss_1791554929.jpg HTTP/1.1 - 200 -
+[14:08:50] GET /screenshot/ss_1791554929.jpg HTTP/1.1 - 200 -
+[UPLOAD] Saved 'i_can t_sleep_friendlyrivalry_wooseulgi.mp4' (580.1 KB) to C:\Users\chyad\Downloads
+[14:09:04] POST /upload HTTP/1.1 - 200 -
+[UPLOAD] Saved 'IFKINGLOVESCRAPEDITS__WOOSEULGI_FRIENDLYRIVALRY_ch.mp4' (703.5 KB) to C:\Users\chyad\Downloads
+[14:09:07] POST /upload HTTP/1.1 - 200 -
+[RECV] Command: 'cmd C:\Users\chyad\.gemini\antigravity\scratch\pc-remote\server\screenshot.exe C:\Users\chyad\.gemini\antigravity\scratch\pc-remote\server\test_multiscreen.jpg all' from 127.0.0.1
+[14:10:24] POST /command HTTP/1.1 - 200 -

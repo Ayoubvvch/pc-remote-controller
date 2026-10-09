@@ -10,13 +10,27 @@ class ScreenCapture {
 
     static void Main(string[] args) {
         try {
-            // Ensure full DPI awareness so capture covers entire desktop without scaling cropping
             try { SetProcessDPIAware(); } catch {}
 
             string outputPath = args.Length > 0 ? args[0] : "screenshot.jpg";
+            string targetScreen = args.Length > 1 ? args[1].ToLower().Trim() : "all";
 
-            // Capture primary screen (or virtual screen)
-            Rectangle bounds = Screen.PrimaryScreen.Bounds;
+            Rectangle bounds;
+
+            if (targetScreen == "1" || targetScreen == "primary" || targetScreen == "p") {
+                bounds = Screen.PrimaryScreen.Bounds;
+            } else if (targetScreen == "2" || targetScreen == "secondary" || targetScreen == "s") {
+                Screen[] all = Screen.AllScreens;
+                if (all.Length > 1) {
+                    bounds = all[0].Primary ? all[1].Bounds : all[0].Bounds;
+                } else {
+                    bounds = Screen.PrimaryScreen.Bounds;
+                }
+            } else {
+                // Default: capture all monitors combined
+                bounds = SystemInformation.VirtualScreen;
+            }
+
             using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format24bppRgb)) {
                 using (Graphics g = Graphics.FromImage(bitmap)) {
                     g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size, CopyPixelOperation.SourceCopy);

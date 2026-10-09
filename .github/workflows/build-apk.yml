@@ -31,27 +31,26 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Rename APK for release
-        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.2.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.3.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PCRemote-APK
-          path: PCRemote-v1.2.apk
+          path: PCRemote-v1.3.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.2.0
-          name: "PC Remote App v1.2.0"
+          tag_name: v1.3.0
+          name: "PC Remote App v1.3.0"
           body: |
-            ### 🚀 PC Remote Control Android App (Release v1.2.0)
-            - 📸 **لقطة شاشة (Screenshot):** التقاط شاشة الحاسوب وعرضها في المحادثة مباشرة مع معاينة بالحجم الكامل.
-            - 📁 **إرسال الملفات والصور:** إرسال أي صورة أو مستند أو ملف من الهاتف إلى مجلد التنزيلات (Downloads) في الحاسوب فوراً.
-            - 💤 **جدولة السكون:** دعم أوامر مثل `sleep 15` و `sleep 30`.
-            - 🛡️ **تأكيد الأمان:** حماية الأوامر الحساسة (shutdown, restart, sleep) بنظام تأكيد (yes / no).
-            - ⚡ **أزرار سريعة:** إضافة زر 📸 لقطة شاشة وزر 📎 لإرفاق الملفات.
-          files: PCRemote-v1.2.apk
+            ### 🚀 PC Remote Control Android App (Release v1.3.0)
+            - 📁 **متصفح وسحب ملفات الحاسوب (PC File Explorer):** تصفح كافة أقراص ومجلدات الحاسوب (C, D, F, Downloads, Desktop) وسحب/تنزيل أي ملف إلى الهاتف بضغطة زر واحدة.
+            - 🖥️ **دعم تصوير الشاشات المتعددة (Multi-Monitor Screenshot):** التقاط الشاشتين معاً في صورة بانورامية كاملة، أو التقاط الشاشة الأولى فقط أو الثانية بشكل مستقل.
+            - 📸 **أزرار مخصصة للشاشات:** أزرار سريعة لاختيار (الشاشتين، شاشة 1، شاشة 2).
+            - 📎 **إرسال واستقبال الملفات ثنائي الاتجاه بالكامل.**
+          files: PCRemote-v1.3.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

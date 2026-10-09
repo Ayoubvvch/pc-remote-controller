@@ -160,8 +160,8 @@ def format_size(num_bytes):
     else:
         return f"{num_bytes} B"
 
-def take_screenshot():
-    """Captures the PC screen and returns the image details."""
+def take_screenshot(screen_target="all"):
+    """Captures the PC screen (all or specific display) and returns the image details."""
     try:
         os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
         filename = f"ss_{int(time.time())}.jpg"
@@ -173,7 +173,7 @@ def take_screenshot():
                 "message": "❌ أداة التقاط الشاشة (screenshot.exe) غير متوفرة."
             }
 
-        res = subprocess.run([SCREENSHOT_EXE, filepath], capture_output=True, text=True,
+        res = subprocess.run([SCREENSHOT_EXE, filepath, screen_target], capture_output=True, text=True,
                              creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
         if res.returncode == 0 and os.path.exists(filepath):
@@ -191,12 +191,13 @@ def take_screenshot():
                 pass
 
             file_size = os.path.getsize(filepath)
+            screen_desc = "الشاشتين معاً (كامل سطح المكتب)" if screen_target == "all" else f"الشاشة رقم {screen_target}"
             return {
                 "status": "success",
                 "type": "image",
                 "image_url": f"/screenshot/{filename}",
                 "filename": filename,
-                "message": f"📸 تم التقاط لقطة شاشة للحاسوب بنجاح! ({format_size(file_size)})"
+                "message": f"📸 تم التقاط لقطة لـ {screen_desc} بنجاح! ({format_size(file_size)})"
             }
         else:
             err_msg = res.stderr.strip() or res.stdout.strip() or "فشل غير معروف"
@@ -209,6 +210,93 @@ def take_screenshot():
             "status": "error",
             "message": f"❌ خطأ أثناء التقاط الشاشة: {str(e)}"
         }
+
+def browse_path(target_path=None):
+    """Browses a directory on PC and returns folders, files, drives, and shortcuts."""
+    import string
+    home = os.path.expanduser("~")
+    shortcuts = [
+        {"name": "Downloads", "path": os.path.join(home, "Downloads"), "icon": "📥"},
+        {"name": "Desktop", "path": os.path.join(home, "Desktop"), "icon": "🖥️"},
+        {"name": "Documents", "path": os.path.join(home, "Documents"), "icon": "📄"},
+        {"name": "Pictures", "path": os.path.join(home, "Pictures"), "icon": "🖼️"},
+        {"name": "Videos", "path": os.path.join(home, "Videos"), "icon": "🎬"},
+    ]
+    if os.path.exists(r"F:\ZPCController"):
+        shortcuts.append({"name": "ZPCController", "path": r"F:\ZPCController", "icon": "🎮"})
+
+    drives = []
+    for letter in string.ascii_uppercase:
+        d = f"{letter}:\\"
+        if os.path.exists(d):
+            drives.append(d)
+
+    if not target_path or not target_path.strip():
+        target_path = os.path.join(home, "Downloads")
+
+    target_path = os.path.abspath(target_path)
+    if not os.path.exists(target_path) or not os.path.isdir(target_path):
+        target_path = os.path.join(home, "Downloads")
+
+    parent = os.path.dirname(target_path)
+    if parent == target_path:
+        parent = None
+
+    folders = []
+    files = []
+
+    try:
+        with os.scandir(target_path) as it:
+            for entry in it:
+                try:
+                    name = entry.name
+                    # Filter out system and hidden files
+                    if name.startswith(".") or name.startswith("$") or name in [
+                        "System Volume Information", "pagefile.sys", "hiberfil.sys", "swapfile.sys", "DumpStack.log"
+                    ]:
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        folders.append({
+                            "name": name,
+                            "path": entry.path
+                        })
+                    elif entry.is_file(follow_symlinks=False):
+                        stat = entry.stat()
+                        size = stat.st_size
+                        ext = os.path.splitext(name)[1].lower()
+                        files.append({
+                            "name": name,
+                            "path": entry.path,
+                            "size": size,
+                            "size_str": format_size(size),
+                            "ext": ext
+                        })
+                except (PermissionError, OSError):
+                    continue
+    except (PermissionError, OSError) as e:
+        return {
+            "status": "error",
+            "message": f"تعذر فتح المجلد: {str(e)}",
+            "current_path": target_path,
+            "parent_path": parent,
+            "drives": drives,
+            "shortcuts": shortcuts,
+            "folders": [],
+            "files": []
+        }
+
+    folders.sort(key=lambda x: x["name"].lower())
+    files.sort(key=lambda x: x["name"].lower())
+
+    return {
+        "status": "success",
+        "current_path": target_path,
+        "parent_path": parent,
+        "drives": drives,
+        "shortcuts": shortcuts,
+        "folders": folders[:150],
+        "files": files[:200]
+    }
 
 def execute_action(action_type, param=None):
     """Executes the requested action safely and returns a response message."""
@@ -604,8 +692,27 @@ def execute_action(action_type, param=None):
         except Exception as e:
             return {"status": "error", "message": f"❌ تعذر الفتح: {str(e)}"}
 
-    elif cmd in ["screenshot", "ss", "screen", "capture", "لقطة", "لقطة شاشة", "شاشة", "صورة الشاشة"]:
-        return take_screenshot()
+    elif (cmd.startswith("screenshot") or cmd.startswith("ss") or 
+          cmd.startswith("screen") or cmd.startswith("شاشة") or cmd.startswith("لقطة")):
+        target = "all"
+        if "1" in cmd or "واحد" in cmd or "أولى" in cmd:
+            target = "1"
+        elif "2" in cmd or "اثنين" in cmd or "ثانية" in cmd:
+            target = "2"
+        elif "all" in cmd or "كل" in cmd or "شاشتين" in cmd or "كلا" in cmd:
+            target = "all"
+        return take_screenshot(target)
+
+    elif cmd in ["files", "dir", "ls", "ملفات", "مستندات", "browse"]:
+        res = browse_path(DOWNLOADS_DIR)
+        flist = "\n".join([f"📁 {f['name']}" for f in res['folders'][:5]] + [f"📄 {f['name']} ({f['size_str']})" for f in res['files'][:8]])
+        return {
+            "status": "info",
+            "message": (
+                f"📂 محتويات مجلد التنزيلات (Downloads):\n\n{flist}\n\n"
+                f"💡 يمكنك تصفح وتحميل أي ملف تريده بسهولة عبر الضغط على زر 📁 في الشريط العلوي للتطبيق!"
+            )
+        }
 
     else:
         return {
@@ -613,8 +720,11 @@ def execute_action(action_type, param=None):
             "message": (
                 f"❓ أمر غير معروف: '{action_type}'\n\n"
                 "📌 الأوامر المدعومة:\n"
-                "• screenshot (أو ss) - التقاط لقطة شاشة للحاسوب وإرسالها للمحادثة فوراً\n"
-                "• إرسال ملفات/صور - أرسل أي ملف ليحفظ مباشرة في مجلد Downloads\n"
+                "• screenshot (أو ss) - التقاط لقطة لجميع الشاشات معاً\n"
+                "• screenshot 1 (أو ss 1) - التقاط لقطة للشاشة الأولى فقط\n"
+                "• screenshot 2 (أو ss 2) - التقاط لقطة للشاشة الثانية فقط\n"
+                "• files (أو ملفات) - استعراض الملفات في مجلد Downloads\n"
+                "• إرسال وسحب الملفات - عبر أزرار 📎 و 📁 في التطبيق مباشرة\n"
                 "• sleep rain <مدة> - تشغيل Rain.mp4 في وضع ملء الشاشة (مثال: sleep rain 15min)\n"
                 "• sleep rain <مدة> min - تشغيل Rain.mp4 مع تصغير كل النوافذ ليبقى الديسكتوب فقط\n"
                 "• s <0-100> (أو sound) - ضبط مستوى صوت الحاسوب (مثال: s 15 أو s 40)\n"
@@ -654,6 +764,42 @@ class RemoteHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif parsed.path in ["/api/browse", "/browse"]:
+            params = urllib.parse.parse_qs(parsed.query)
+            target_path = params.get("path", [""])[0]
+            data = browse_path(target_path)
+            body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif parsed.path in ["/api/download", "/download"]:
+            params = urllib.parse.parse_qs(parsed.query)
+            file_path = params.get("path", [""])[0] or params.get("file", [""])[0]
+            if file_path and os.path.exists(file_path) and os.path.isfile(file_path):
+                try:
+                    file_size = os.path.getsize(file_path)
+                    filename = os.path.basename(file_path)
+                    encoded_name = urllib.parse.quote(filename)
+                    self.send_response(200)
+                    self._send_cors_headers()
+                    self.send_header("Content-Type", "application/octet-stream")
+                    self.send_header("Content-Length", str(file_size))
+                    self.send_header("Content-Disposition", f"attachment; filename=\"{encoded_name}\"; filename*=UTF-8''{encoded_name}")
+                    self.end_headers()
+                    with open(file_path, "rb") as f:
+                        while True:
+                            chunk = f.read(65536)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                except Exception:
+                    pass
+            else:
+                self.send_response(404)
+                self.end_headers()
         elif parsed.path.startswith("/screenshot/"):
             filename = os.path.basename(parsed.path.replace("/screenshot/", "").strip())
             filepath = os.path.join(SCREENSHOTS_DIR, filename)
