@@ -100,6 +100,47 @@ def format_duration(seconds):
     else:
         return f"{seconds} ثانية"
 
+# Volume Control via vol.exe (Windows CoreAudio API)
+VOL_EXE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vol.exe")
+
+def set_system_volume(level):
+    """Sets Windows master volume to a percentage (0-100)."""
+    try:
+        val = int(level)
+        val = max(0, min(100, val))
+        if os.path.exists(VOL_EXE):
+            res = subprocess.run([VOL_EXE, str(val)], capture_output=True, text=True,
+                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            return val
+    except Exception:
+        pass
+    return None
+
+def get_system_volume():
+    """Gets Windows master volume percentage."""
+    try:
+        if os.path.exists(VOL_EXE):
+            res = subprocess.run([VOL_EXE], capture_output=True, text=True,
+                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            out = res.stdout.strip()
+            if out.startswith("GET:"):
+                return out.replace("GET:", "").strip()
+    except Exception:
+        pass
+    return None
+
+def toggle_system_mute():
+    """Toggles system mute."""
+    try:
+        if os.path.exists(VOL_EXE):
+            res = subprocess.run([VOL_EXE, "mute"], capture_output=True, text=True,
+                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            out = res.stdout.strip()
+            return "MUTED:True" in out
+    except Exception:
+        pass
+    return None
+
 def execute_action(action_type, param=None):
     """Executes the requested action safely and returns a response message."""
     global active_sleep_timer, active_sleep_details
@@ -175,6 +216,9 @@ def execute_action(action_type, param=None):
         # Close any current mpv instance
         kill_mpv()
 
+        # Set system volume to 28% (25-30% range)
+        set_system_volume(28)
+
         if not os.path.exists(RAIN_VIDEO):
             return {
                 "status": "error",
@@ -207,7 +251,7 @@ def execute_action(action_type, param=None):
         return {
             "status": "success",
             "message": (
-                f"🌧️ تم تشغيل Rain.mp4 في وضع ملء الشاشة والتكرار المستمر (Fullscreen + Loop)!\n\n"
+                f"🌧️ تم تشغيل Rain.mp4 في وضع ملء الشاشة بصوت 28% (Fullscreen + Loop)!\n\n"
                 f"⏱️ المدة المحددة: {dur_human}\n"
                 f"💤 سينام الحاسوب تلقائياً بعد انتهاء الوقت.\n"
                 f"💡 أرسل 'cancel' أو 'stop' لإلغاء الموقت وإغلاق الفيديو في أي وقت."
@@ -216,6 +260,9 @@ def execute_action(action_type, param=None):
 
     elif cmd in ["messi", "ميسي", "messi mp4", "messi.mp4"]:
         kill_mpv()
+
+        # Set system volume to 16%
+        set_system_volume(16)
 
         if not os.path.exists(MESSI_VIDEO):
             return {
@@ -228,7 +275,7 @@ def execute_action(action_type, param=None):
                          creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         return {
             "status": "success",
-            "message": "🐐⚽ تم تشغيل Messi.mp4 في وضع ملء الشاشة والتكرار المستمر (Fullscreen + Loop)! 🔥\n💡 أرسل 'stop' لإغلاق الفيديو."
+            "message": "🐐⚽ تم تشغيل Messi.mp4 في وضع ملء الشاشة والتكرار المستمر بصوت 16%! 🔥\n💡 أرسل 'stop' لإغلاق الفيديو."
         }
 
     elif cmd in ["cancel", "abort", "إلغاء", "stop", "إيقاف", "close"]:
@@ -271,21 +318,37 @@ def execute_action(action_type, param=None):
         }
 
     elif cmd in ["mute", "صامت", "كتم"]:
-        # Send VK_VOLUME_MUTE keypress
-        ps = "$wscript = New-Object -ComObject Wscript.Shell; $wscript.SendKeys([char]173)"
-        subprocess.run(["powershell", "-NoProfile", "-Command", ps], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        return {
-            "status": "success",
-            "message": "🔇 تم تبديل كتم الصوت (Mute toggle)."
-        }
+        is_muted = toggle_system_mute()
+        if is_muted is True:
+            return {
+                "status": "success",
+                "message": "🔇 تم كتم صوت الحاسوب (Muted)."
+            }
+        else:
+            return {
+                "status": "success",
+                "message": "🔊 تم إلغاء كتم صوت الحاسوب (Unmuted)."
+            }
 
-    elif cmd.startswith("vol ") or cmd.startswith("volume "):
-        parts = cmd.split()
-        val = parts[1] if len(parts) > 1 else "50"
-        return {
-            "status": "info",
-            "message": f"🔊 تم ضبط الصوت على {val}%."
-        }
+    elif (cmd.startswith("sound") or cmd.startswith("vol") or 
+          cmd.startswith("volume") or cmd.startswith("صوت")):
+        import re
+        nums = re.findall(r"\d+", cmd)
+        if nums:
+            val = int(nums[0])
+            val = max(0, min(100, val))
+            set_system_volume(val)
+            return {
+                "status": "success",
+                "message": f"🔊 تم ضبط مستوى صوت الحاسوب على {val}%."
+            }
+        else:
+            cur = get_system_volume()
+            cur_str = f"{cur}%" if cur is not None else "غير معروف"
+            return {
+                "status": "info",
+                "message": f"🔊 مستوى صوت الحاسوب الحالي: {cur_str}\n💡 لتغيير الصوت أرسل مثلاً: sound 40 أو sound 25"
+            }
 
     elif cmd in ["status", "حالة", "info", "معلومات", "ping", "test"]:
         now_str = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
@@ -333,8 +396,9 @@ def execute_action(action_type, param=None):
             "message": (
                 f"❓ أمر غير معروف: '{action_type}'\n\n"
                 "📌 الأوامر المدعومة:\n"
-                "• sleep rain <مدة> - تشغيل Rain.mp4 ثم النوم بعد المدة (مثال: sleep rain 15min أو sleep rain 1h)\n"
-                "• messi - تشغيل فيديو Messi.mp4 في وضع ملء الشاشة والتكرار (Fullscreen + Loop)\n"
+                "• sleep rain <مدة> - تشغيل Rain.mp4 بصوت 28% ثم النوم بعد المدة (مثال: sleep rain 15min)\n"
+                "• messi - تشغيل فيديو Messi.mp4 بصوت 16% في وضع ملء الشاشة والتكرار\n"
+                "• sound <0-100> - ضبط مستوى صوت الحاسوب (مثال: sound 25 أو sound 40)\n"
                 "• stop (أو cancel) - إغلاق مشغل الفيديو وإلغاء أي موقت مجدول\n"
                 "• sleep (أو 'نوم') - وضع السكون المباشر\n"
                 "• hibernate (أو 'سبات') - الإسبات\n"
@@ -342,7 +406,7 @@ def execute_action(action_type, param=None):
                 "• restart (أو 'إعادة تشغيل') - إعادة التشغيل\n"
                 "• lock (أو 'قفل') - قفل الشاشة\n"
                 "• mute (أو 'كتم') - تبديل كتم الصوت\n"
-                "• status (أو 'حالة') - فحص الاتصال ومعلومات الجهاز\n"
+                "• status (أو 'حالة') - فحص الاتصال ومعلومات الجهاز ومستوى الصوت\n"
                 "• open <رابط أو برنامج> - فتح تطبيق أو موقع\n"
                 "• cmd <أمر ويندوز> - تنفيذ أمر سطر الأوامر"
             )

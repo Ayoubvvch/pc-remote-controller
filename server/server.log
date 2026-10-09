@@ -17,3 +17,39 @@ Ready to receive commands from your Android app!
 [RECV] Command: 'status' from 192.168.11.233
 [03:03:36] POST /command HTTP/1.1 - 200 -
 [03:04:12] GET /ping HTTP/1.1 - 200 -
+============================================================
+🚀 PC Remote Control Server is RUNNING on port 5050
+📡 Connect from your phone at any of these URLs:
+   👉 http://192.168.11.110:5050
+   👉 http://192.168.11.109:5050
+============================================================
+Ready to receive commands from your Android app!
+[03:22:16] GET /ping HTTP/1.1 - 200 -
+[RECV] Command: 'messi' from 192.168.11.233
+[03:22:35] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[03:23:26] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sleep rain 15min' from 192.168.11.233
+[03:24:07] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'cancel' from 192.168.11.233
+[03:24:55] POST /command HTTP/1.1 - 200 -
+[03:26:47] GET /ping HTTP/1.1 - 200 -
+[RECV] Command: 'messi' from 192.168.11.233
+[03:26:54] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[03:27:20] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[03:27:23] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'rain' from 192.168.11.233
+[03:27:34] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'mute' from 192.168.11.233
+[03:28:21] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'mute' from 192.168.11.233
+[03:28:40] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'mute' from 192.168.11.233
+[03:28:44] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'mute' from 192.168.11.233
+[03:28:46] POST /command HTTP/1.1 - 200 -
+[03:34:46] GET /ping HTTP/1.1 - 200 -
+[03:34:47] GET /ping HTTP/1.1 - 200 -
+[03:34:54] GET /ping HTTP/1.1 - 200 -
