@@ -133,7 +133,7 @@ class RemoteService : Service() {
     private fun startRootClipboardWatcher(ip: String, port: String) {
         Thread {
             try {
-                ensureAndroidEnvScript()
+                ensureWatcherScript()
 
                 val apkPath = applicationInfo.sourceDir
                 Log.i(TAG, "Starting ClipboardWatcher daemon with apk: $apkPath")
@@ -141,16 +141,13 @@ class RemoteService : Service() {
                 // Kill any previous instance first
                 RootUtil.executeSu("pkill -9 -f com.remote.pccontroller.ClipboardWatcher")
 
-                val cmd = ". /data/local/tmp/android_env.sh; " +
-                        "export CLASSPATH=$apkPath; " +
-                        "exec /system/bin/app_process /system/bin com.remote.pccontroller.ClipboardWatcher $ip $port"
-
                 val suPath = if (File("/product/bin/su").exists()) "/product/bin/su" else "su"
+                val cmd = "$suPath 2000 -c \"/data/local/tmp/start_watcher.sh $apkPath $ip $port\""
                 val process = Runtime.getRuntime().exec(arrayOf(suPath, "-c", cmd))
                 watcherProcess = process
                 isRootWatcherActive = true
 
-                Log.i(TAG, "ClipboardWatcher daemon launched successfully as root")
+                Log.i(TAG, "ClipboardWatcher daemon launched successfully as shell UID 2000")
 
                 // Read daemon output in background
                 BufferedReader(InputStreamReader(process.inputStream)).forEachLine { line ->
@@ -190,21 +187,29 @@ class RemoteService : Service() {
         }.start()
     }
 
-    private fun ensureAndroidEnvScript() {
-        val check = File("/data/local/tmp/android_env.sh")
-        if (!check.exists()) {
-            val script = """
-                export ANDROID_ROOT=/system
-                export ANDROID_DATA=/data
-                export ANDROID_ART_ROOT=/apex/com.android.art
-                export ANDROID_I18N_ROOT=/apex/com.android.i18n
-                export ANDROID_TZDATA_ROOT=/apex/com.android.tzdata
-                export PATH=/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/system_ext/bin:/system/bin:/system/xbin:${'$'}PATH
-                export BOOTCLASSPATH='/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/framework-location.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/mediatek-common.jar:/system/framework/mediatek-framework.jar:/system/framework/mediatek-ims-base.jar:/system/framework/mediatek-ims-common.jar:/system/framework/mediatek-telecom-common.jar:/system/framework/mediatek-telephony-base.jar:/system/framework/mediatek-telephony-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar'
-                export DEX2OATBOOTCLASSPATH='/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/framework-location.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/mediatek-common.jar:/system/framework/mediatek-framework.jar:/system/framework/mediatek-ims-base.jar:/system/framework/mediatek-ims-common.jar:/system/framework/mediatek-telecom-common.jar:/system/framework/mediatek-telephony-base.jar:/system/framework/mediatek-telephony-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar'
-            """.trimIndent()
-            RootUtil.executeSu("echo '$script' > /data/local/tmp/android_env.sh && chmod 777 /data/local/tmp/android_env.sh")
-        }
+    private fun ensureWatcherScript() {
+        val envScript = """
+            export ANDROID_ROOT=/system
+            export ANDROID_DATA=/data
+            export ANDROID_ART_ROOT=/apex/com.android.art
+            export ANDROID_I18N_ROOT=/apex/com.android.i18n
+            export ANDROID_TZDATA_ROOT=/apex/com.android.tzdata
+            export PATH=/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/system_ext/bin:/system/bin:/system/xbin:${'$'}PATH
+            export BOOTCLASSPATH='/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/framework-location.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/mediatek-common.jar:/system/framework/mediatek-framework.jar:/system/framework/mediatek-ims-base.jar:/system/framework/mediatek-ims-common.jar:/system/framework/mediatek-telecom-common.jar:/system/framework/mediatek-telephony-base.jar:/system/framework/mediatek-telephony-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar'
+            export DEX2OATBOOTCLASSPATH='/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/framework-location.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/mediatek-common.jar:/system/framework/mediatek-framework.jar:/system/framework/mediatek-ims-base.jar:/system/framework/mediatek-ims-common.jar:/system/framework/mediatek-telecom-common.jar:/system/framework/mediatek-telephony-base.jar:/system/framework/mediatek-telephony-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar'
+        """.trimIndent()
+        RootUtil.writeRootFile("/data/local/tmp/android_env.sh", envScript, "755")
+
+        val runnerScript = """
+            #!/system/bin/sh
+            APK_PATH="${'$'}1"
+            IP="${'$'}2"
+            PORT="${'$'}3"
+            . /data/local/tmp/android_env.sh
+            export CLASSPATH="${'$'}APK_PATH"
+            exec /system/bin/app_process /system/bin com.remote.pccontroller.ClipboardWatcher "${'$'}IP" "${'$'}PORT"
+        """.trimIndent()
+        RootUtil.writeRootFile("/data/local/tmp/start_watcher.sh", runnerScript, "755")
     }
 
     private fun buildNotification(title: String, text: String): Notification {

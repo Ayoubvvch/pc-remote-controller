@@ -22,13 +22,20 @@ object ClipboardWatcher {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        println("=== ClipboardWatcher Starting as Root/Shell ===")
+        println("=== ClipboardWatcher Starting as UID 2000 / Shell ===")
         val ip = if (args.isNotEmpty()) args[0] else "192.168.11.109"
         val port = if (args.size > 1) args[1] else "5050"
         println("Target PC Server: http://$ip:$port")
 
         bypassHiddenApiRestrictions()
         initClipboardService()
+
+        // Fetch current phone clipboard right now so lastKnownText is initialized
+        val initialText = getPrimaryClipText()
+        if (!initialText.isNullOrEmpty()) {
+            lastKnownText = initialText
+            println("Initial phone clipboard loaded: ${initialText.take(30)}")
+        }
 
         // Thread 1: PC -> Phone Sync (Long Polling from PC server)
         val pcPollThread = Thread({
@@ -99,11 +106,19 @@ object ClipboardWatcher {
         try {
             val paramTypes = method.parameterTypes
             val args = arrayOfNulls<Any>(paramTypes.size)
+            var strCount = 0
             for (i in paramTypes.indices) {
                 val pt = paramTypes[i]
                 when {
-                    pt == String::class.java -> args[i] = "com.android.shell"
-                    pt == Int::class.javaPrimitiveType || pt == java.lang.Integer::class.java -> args[i] = 0
+                    pt == String::class.java -> {
+                        if (strCount == 0) {
+                            args[i] = "com.android.shell" // callingPackage must be com.android.shell
+                        } else {
+                            args[i] = null // attributionTag must be null
+                        }
+                        strCount++
+                    }
+                    pt == Int::class.javaPrimitiveType || pt == java.lang.Integer::class.java -> args[i] = 0 // userId=0, deviceId=0
                     pt == Boolean::class.javaPrimitiveType || pt == java.lang.Boolean::class.java -> args[i] = false
                     else -> args[i] = null
                 }
@@ -119,7 +134,7 @@ object ClipboardWatcher {
                 if (intent != null) return intent.toUri(0)
             }
         } catch (e: Exception) {
-            // Ignore security errors or reinitialize if needed
+            println("Error in getPrimaryClipText: ${e.message}")
         }
         return null
     }
@@ -131,11 +146,19 @@ object ClipboardWatcher {
             val clip = ClipData.newPlainText("PC Remote", text)
             val paramTypes = method.parameterTypes
             val args = arrayOfNulls<Any>(paramTypes.size)
+            var strCount = 0
             for (i in paramTypes.indices) {
                 val pt = paramTypes[i]
                 when {
                     pt == ClipData::class.java -> args[i] = clip
-                    pt == String::class.java -> args[i] = "com.android.shell"
+                    pt == String::class.java -> {
+                        if (strCount == 0) {
+                            args[i] = "com.android.shell" // callingPackage
+                        } else {
+                            args[i] = null // attributionTag
+                        }
+                        strCount++
+                    }
                     pt == Int::class.javaPrimitiveType || pt == java.lang.Integer::class.java -> args[i] = 0
                     pt == Boolean::class.javaPrimitiveType || pt == java.lang.Boolean::class.java -> args[i] = false
                     else -> args[i] = null
@@ -150,7 +173,7 @@ object ClipboardWatcher {
     }
 
     private fun runPhoneToPcSync(ip: String, port: String) {
-        println("Starting Phone -> PC clipboard monitoring...")
+        println("Starting Phone -> PC clipboard monitoring loop (interval: 500ms)...")
         while (true) {
             try {
                 if (clipboardService == null || getClipMethod == null) {
@@ -165,6 +188,8 @@ object ClipboardWatcher {
                     if (success) {
                         println("Successfully synced to PC: ${currentText.take(30)}")
                         sendToastNotification("📋 تم إرسال الحافظة إلى الحاسوب")
+                    } else {
+                        println("Failed to send clipboard to PC server at $ip:$port")
                     }
                 }
             } catch (e: Exception) {
@@ -172,7 +197,7 @@ object ClipboardWatcher {
             }
 
             try {
-                Thread.sleep(600) // 600ms polling: ultra responsive and negligible CPU
+                Thread.sleep(500)
             } catch (ignored: InterruptedException) {
             }
         }
@@ -212,7 +237,6 @@ object ClipboardWatcher {
                     Thread.sleep(2500)
                 }
             } catch (e: Exception) {
-                // PC server may be sleeping or unreachable
                 try {
                     Thread.sleep(2500)
                 } catch (ignored: Exception) {

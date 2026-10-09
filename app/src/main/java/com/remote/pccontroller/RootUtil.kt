@@ -50,6 +50,27 @@ object RootUtil {
         return false
     }
 
+    fun writeRootFile(filePath: String, content: String, permissions: String = "755"): Boolean {
+        val suPaths = arrayOf("/product/bin/su", "su", "/system/bin/su", "/system/xbin/su")
+        for (su in suPaths) {
+            try {
+                val process = Runtime.getRuntime().exec(arrayOf(su, "-c", "cat > $filePath && chmod $permissions $filePath"))
+                process.outputStream.use { os ->
+                    os.write(content.toByteArray(Charsets.UTF_8))
+                    os.flush()
+                }
+                val exited = process.waitFor(5, TimeUnit.SECONDS)
+                if (exited && process.exitValue() == 0) {
+                    Log.d(TAG, "writeRootFile success [$su]: $filePath")
+                    return true
+                }
+            } catch (e: Exception) {
+                // Try next
+            }
+        }
+        return false
+    }
+
     fun autoGrantAllPermissions(context: Context) {
         val pkg = context.packageName
         Thread {
