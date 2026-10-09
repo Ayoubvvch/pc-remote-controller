@@ -3,12 +3,6 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.READ_LOGS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -43,35 +37,6 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
-
-        <!-- Transparent Trampoline Activity for 100% Reliable Background Clipboard Capture -->
-        <activity
-            android:name=".TransparentClipActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:excludeFromRecents="true"
-            android:taskAffinity="" />
-
-        <!-- Persistent Foreground Service for Real-time Control and Clipboard Sync -->
-        <service
-            android:name=".RemoteService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-
-        <!-- Notification Quick Action Receiver -->
-        <receiver
-            android:name=".ServiceActionReceiver"
-            android:exported="false" />
-
-        <!-- Auto-start service on device boot -->
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
 
     </application>
 
