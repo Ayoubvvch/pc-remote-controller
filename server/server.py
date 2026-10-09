@@ -368,20 +368,26 @@ def browse_path(target_path=None):
                     ]:
                         continue
                     if entry.is_dir(follow_symlinks=False):
+                        stat = entry.stat()
+                        last_time = max(stat.st_mtime, getattr(stat, 'st_ctime', stat.st_mtime))
                         folders.append({
                             "name": name,
-                            "path": entry.path
+                            "path": entry.path,
+                            "mtime": last_time
                         })
                     elif entry.is_file(follow_symlinks=False):
                         stat = entry.stat()
                         size = stat.st_size
+                        last_time = max(stat.st_mtime, getattr(stat, 'st_ctime', stat.st_mtime))
+                        date_str = datetime.fromtimestamp(last_time).strftime("%Y-%m-%d %I:%M %p")
                         ext = os.path.splitext(name)[1].lower()
                         files.append({
                             "name": name,
                             "path": entry.path,
                             "size": size,
-                            "size_str": format_size(size),
-                            "ext": ext
+                            "size_str": f"{format_size(size)} • {date_str}",
+                            "ext": ext,
+                            "mtime": last_time
                         })
                 except (PermissionError, OSError):
                     continue
@@ -397,8 +403,9 @@ def browse_path(target_path=None):
             "files": []
         }
 
-    folders.sort(key=lambda x: x["name"].lower())
-    files.sort(key=lambda x: x["name"].lower())
+    # Sort descending by latest modified/added time (newest first)
+    folders.sort(key=lambda x: x.get("mtime", 0), reverse=True)
+    files.sort(key=lambda x: x.get("mtime", 0), reverse=True)
 
     return {
         "status": "success",
