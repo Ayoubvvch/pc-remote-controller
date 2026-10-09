@@ -61,6 +61,7 @@ MESSI_VIDEO = r"F:\ZPCController\Messi.mp4"
 
 active_sleep_timer = None
 active_sleep_details = None
+pending_confirmation = None
 
 def kill_mpv():
     """Closes any running mpv instances."""
@@ -144,7 +145,7 @@ def toggle_system_mute():
 
 def execute_action(action_type, param=None):
     """Executes the requested action safely and returns a response message."""
-    global active_sleep_timer, active_sleep_details
+    global active_sleep_timer, active_sleep_details, pending_confirmation
     cmd = action_type.strip().lower()
     
     # Delayed execution helper so response reaches the client before PC sleeps/shuts down
@@ -155,49 +156,159 @@ def execute_action(action_type, param=None):
         t = threading.Thread(target=worker, daemon=True)
         t.start()
 
-    if cmd in ["sleep", "نوم", "سكون", "suspend"]:
-        def do_sleep():
-            # PowerShell SuspendState
+    # Confirmation Handlers (yes / no)
+    if cmd in ["yes", "y", "نعم", "ايوه", "ok"]:
+        if pending_confirmation and (time.time() - pending_confirmation.get("time", 0) <= 60):
+            action_to_do = pending_confirmation["action"]
+            pending_confirmation = None
+            
+            if action_to_do == "sleep":
+                def do_sleep():
+                    ps_cmd = (
+                        "Add-Type -AssemblyName System.Windows.Forms; "
+                        "[System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"
+                    )
+                    subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd],
+                                   creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                run_delayed(do_sleep, 1.2)
+                return {
+                    "status": "success",
+                    "message": "💤 تم تأكيد الأمر! جاري إدخال الحاسوب في وضع السكون (Sleep)... تصبح على خير!"
+                }
+
+            elif action_to_do == "shutdown":
+                subprocess.run(["shutdown", "/s", "/t", "5", "/c", "Shutdown confirmed from Phone"], 
+                               creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                return {
+                    "status": "warning",
+                    "message": "🛑 تم تأكيد الأمر! سيتم إيقاف تشغيل الحاسوب بالكامل خلال 5 ثوانٍ."
+                }
+
+            elif action_to_do == "restart":
+                subprocess.run(["shutdown", "/r", "/t", "5", "/c", "Restart confirmed from Phone"],
+                               creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                return {
+                    "status": "warning",
+                    "message": "🔄 تم تأكيد الأمر! سيتم إعادة تشغيل الحاسوب خلال 5 ثوانٍ."
+                }
+
+            elif action_to_do == "hibernate":
+                def do_hibernate():
+                    subprocess.run(["shutdown", "/h"], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                run_delayed(do_hibernate, 1.2)
+                return {
+                    "status": "success",
+                    "message": "⚡ تم تأكيد الأمر! جاري إدخال الحاسوب في وضع الإسبات (Hibernate)..."
+                }
+        else:
+            pending_confirmation = None
+            return {
+                "status": "info",
+                "message": "ℹ️ لا يوجد أمر معلق بانتظار التأكيد حالياً (أو انتهت صلاحية التأكيد 60 ثانية)."
+            }
+
+    elif cmd in ["no", "n", "لا", "رفض"]:
+        if pending_confirmation:
+            action_name = pending_confirmation["action"]
+            pending_confirmation = None
+            return {
+                "status": "success",
+                "message": f"✅ تم إلغاء تنفيذ أمر ({action_name}) بنجاح! حاسوبك بأمان."
+            }
+        else:
+            return {
+                "status": "info",
+                "message": "ℹ️ لا يوجد أمر معلق لإلغائه."
+            }
+
+    # Scheduled Sleep without Rain (e.g. sleep 15, sleep 30, sleep 15m, sleep 1h)
+    elif ((cmd.startswith("sleep ") or cmd.startswith("نوم ") or cmd.startswith("سكون "))
+          and not cmd.startswith("sleep rain")):
+        dur_part = cmd.replace("sleep", "").replace("نوم", "").replace("سكون", "").strip()
+        sec = parse_duration_seconds(dur_part, default_sec=15 * 60)
+        dur_human = format_duration(sec)
+
+        # Cancel any previous sleep timer
+        if active_sleep_timer:
+            try:
+                active_sleep_timer.cancel()
+            except Exception:
+                pass
+            active_sleep_timer = None
+
+        def on_timed_sleep():
+            global active_sleep_timer, active_sleep_details
+            kill_mpv()
             ps_cmd = (
                 "Add-Type -AssemblyName System.Windows.Forms; "
                 "[System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"
             )
-            subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        run_delayed(do_sleep, 1.2)
+            subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd],
+                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            active_sleep_timer = None
+            active_sleep_details = None
+
+        active_sleep_timer = threading.Timer(sec, on_timed_sleep)
+        active_sleep_timer.daemon = True
+        active_sleep_timer.start()
+        active_sleep_details = {"name": "Scheduled Sleep", "seconds": sec, "text": dur_human, "start": time.time()}
+
         return {
             "status": "success",
-            "message": "💤 جاري إدخال الحاسوب في وضع السكون (Sleep)... تصبح على خير!"
+            "message": (
+                f"💤 تم جدولة وضع السكون (Sleep) بنجاح!\n\n"
+                f"⏱️ سينام الحاسوب تلقائياً بعد: {dur_human}.\n"
+                f"💡 أرسل 'cancel' لإلغاء الموقت في أي وقت."
+            )
         }
 
-    elif cmd in ["hibernate", "سبات"]:
-        def do_hibernate():
-            subprocess.run(["shutdown", "/h"], creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        run_delayed(do_hibernate, 1.2)
-        return {
-            "status": "success",
-            "message": "⚡ جاري إدخال الحاسوب في وضع السبات (Hibernate)..."
-        }
-
-    elif cmd in ["shutdown", "طفي", "إيقاف"]:
-        seconds = 10
-        try:
-            if param and str(param).isdigit():
-                seconds = int(param)
-        except Exception:
-            pass
-        subprocess.run(["shutdown", "/s", "/t", str(seconds), "/c", "Shutdown requested from Phone"], 
-                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    # Immediate critical actions that require confirmation
+    elif cmd in ["sleep", "نوم", "سكون", "suspend"]:
+        pending_confirmation = {"action": "sleep", "time": time.time()}
         return {
             "status": "warning",
-            "message": f"🛑 سيتم إيقاف تشغيل الحاسوب خلال {seconds} ثوانٍ.\nأرسل 'cancel' لإلغاء الإيقاف."
+            "message": (
+                "⚠️ تأكيد أمان:\nهل تريد إدخال الحاسوب في وضع السكون (Sleep) الآن؟\n\n"
+                "👉 أرسل **yes** أو **نعم** للتأكيد.\n"
+                "👉 أرسل **no** أو **لا** للإلغاء.\n"
+                "⏳ مهلة التأكيد: 60 ثانية."
+            )
+        }
+
+    elif cmd in ["shutdown", "طفي", "إيقاف", "إطفاء"]:
+        pending_confirmation = {"action": "shutdown", "time": time.time()}
+        return {
+            "status": "warning",
+            "message": (
+                "⚠️ تأكيد أمان:\nهل أنت متأكد من رغبتك في إيقاف تشغيل الحاسوب (Shutdown) بالكامل؟\n\n"
+                "👉 أرسل **yes** أو **نعم** للتأكيد.\n"
+                "👉 أرسل **no** أو **لا** للإلغاء.\n"
+                "⏳ مهلة التأكيد: 60 ثانية."
+            )
         }
 
     elif cmd in ["restart", "reboot", "إعادة تشغيل"]:
-        subprocess.run(["shutdown", "/r", "/t", "10", "/c", "Restart requested from Phone"],
-                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        pending_confirmation = {"action": "restart", "time": time.time()}
         return {
             "status": "warning",
-            "message": "🔄 سيتم إعادة تشغيل الحاسوب خلال 10 ثوانٍ.\nأرسل 'cancel' لإلغاء الإعادة."
+            "message": (
+                "⚠️ تأكيد أمان:\nهل تريد بالتأكيد إعادة تشغيل الحاسوب (Restart)؟\n\n"
+                "👉 أرسل **yes** أو **نعم** للتأكيد.\n"
+                "👉 أرسل **no** أو **لا** للإلغاء.\n"
+                "⏳ مهلة التأكيد: 60 ثانية."
+            )
+        }
+
+    elif cmd in ["hibernate", "سبات"]:
+        pending_confirmation = {"action": "hibernate", "time": time.time()}
+        return {
+            "status": "warning",
+            "message": (
+                "⚠️ تأكيد أمان:\nهل تريد إدخال الحاسوب في وضع الإسبات (Hibernate) الآن؟\n\n"
+                "👉 أرسل **yes** أو **نعم** للتأكيد.\n"
+                "👉 أرسل **no** أو **لا** للإلغاء.\n"
+                "⏳ مهلة التأكيد: 60 ثانية."
+            )
         }
 
     elif (cmd.startswith("sleep rain") or cmd == "sleep rain" or 
