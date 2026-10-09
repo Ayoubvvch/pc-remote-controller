@@ -53,8 +53,56 @@ def get_local_ips():
         pass
     return ips
 
+# Media & Custom Automation Config
+MPV_PATH = r"C:\Apps\mpv\mpv.exe"
+RAIN_VIDEO = r"F:\ZPCController\Rain.mp4"
+MESSI_VIDEO = r"F:\ZPCController\Messi.mp4"
+
+active_sleep_timer = None
+active_sleep_details = None
+
+def kill_mpv():
+    """Closes any running mpv instances."""
+    try:
+        subprocess.run(["taskkill", "/f", "/im", "mpv.exe"], capture_output=True,
+                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        subprocess.run(["taskkill", "/f", "/im", "mpv.com"], capture_output=True,
+                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    except Exception:
+        pass
+
+def parse_duration_seconds(duration_str, default_sec=15 * 60):
+    """Parses durations like '15min', '15m', '1h', '30s', '45' into seconds."""
+    import re
+    s = duration_str.strip().lower()
+    if not s:
+        return default_sec
+    m = re.match(r"^([\d\.]+)\s*(h|hr|hours?|m|min|minutes?|s|sec|seconds?|دقيقة|ساعة|ثانية)?$", s)
+    if m:
+        val = float(m.group(1))
+        unit = (m.group(2) or "m").lower()
+        if unit in ["h", "hr", "hour", "hours", "ساعة"]:
+            return int(val * 3600)
+        elif unit in ["s", "sec", "second", "seconds", "ثانية"]:
+            return int(val)
+        else:
+            return int(val * 60)
+    return default_sec
+
+def format_duration(seconds):
+    """Formats seconds into readable string."""
+    if seconds >= 3600:
+        hrs = seconds / 3600
+        return f"{hrs:.1f} ساعة" if hrs % 1 != 0 else f"{int(hrs)} ساعة"
+    elif seconds >= 60:
+        mins = seconds // 60
+        return f"{mins} دقيقة"
+    else:
+        return f"{seconds} ثانية"
+
 def execute_action(action_type, param=None):
     """Executes the requested action safely and returns a response message."""
+    global active_sleep_timer, active_sleep_details
     cmd = action_type.strip().lower()
     
     # Delayed execution helper so response reaches the client before PC sleeps/shuts down
@@ -110,18 +158,106 @@ def execute_action(action_type, param=None):
             "message": "🔄 سيتم إعادة تشغيل الحاسوب خلال 10 ثوانٍ.\nأرسل 'cancel' لإلغاء الإعادة."
         }
 
-    elif cmd in ["cancel", "abort", "إلغاء"]:
+    elif cmd.startswith("sleep rain") or cmd == "sleep rain" or cmd.startswith("rain "):
+        # Cancel any previous sleep timer
+        if active_sleep_timer:
+            try:
+                active_sleep_timer.cancel()
+            except Exception:
+                pass
+            active_sleep_timer = None
+
+        # Parse duration (default 15 minutes)
+        dur_part = cmd.replace("sleep rain", "").replace("rain", "").strip()
+        sec = parse_duration_seconds(dur_part, default_sec=15 * 60)
+        dur_human = format_duration(sec)
+
+        # Close any current mpv instance
+        kill_mpv()
+
+        if not os.path.exists(RAIN_VIDEO):
+            return {
+                "status": "error",
+                "message": f"❌ لم يتم العثور على ملف الفيديو: {RAIN_VIDEO}"
+            }
+
+        # Launch mpv with Rain.mp4 in fullscreen and infinite loop
+        mpv_exec = MPV_PATH if os.path.exists(MPV_PATH) else "mpv"
+        subprocess.Popen([mpv_exec, "--fs", "--loop-file=inf", RAIN_VIDEO],
+                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+
+        # Setup sleep timer callback
+        def on_rain_timer_done():
+            global active_sleep_timer, active_sleep_details
+            kill_mpv()
+            ps_cmd = (
+                "Add-Type -AssemblyName System.Windows.Forms; "
+                "[System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"
+            )
+            subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd],
+                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            active_sleep_timer = None
+            active_sleep_details = None
+
+        active_sleep_timer = threading.Timer(sec, on_rain_timer_done)
+        active_sleep_timer.daemon = True
+        active_sleep_timer.start()
+        active_sleep_details = {"name": "Rain Sleep", "seconds": sec, "text": dur_human, "start": time.time()}
+
+        return {
+            "status": "success",
+            "message": (
+                f"🌧️ تم تشغيل Rain.mp4 في وضع ملء الشاشة والتكرار المستمر (Fullscreen + Loop)!\n\n"
+                f"⏱️ المدة المحددة: {dur_human}\n"
+                f"💤 سينام الحاسوب تلقائياً بعد انتهاء الوقت.\n"
+                f"💡 أرسل 'cancel' أو 'stop' لإلغاء الموقت وإغلاق الفيديو في أي وقت."
+            )
+        }
+
+    elif cmd in ["messi", "ميسي", "messi mp4", "messi.mp4"]:
+        kill_mpv()
+
+        if not os.path.exists(MESSI_VIDEO):
+            return {
+                "status": "error",
+                "message": f"❌ لم يتم العثور على ملف الفيديو: {MESSI_VIDEO}"
+            }
+
+        mpv_exec = MPV_PATH if os.path.exists(MPV_PATH) else "mpv"
+        subprocess.Popen([mpv_exec, "--fs", "--loop-file=inf", MESSI_VIDEO],
+                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        return {
+            "status": "success",
+            "message": "🐐⚽ تم تشغيل Messi.mp4 في وضع ملء الشاشة والتكرار المستمر (Fullscreen + Loop)! 🔥\n💡 أرسل 'stop' لإغلاق الفيديو."
+        }
+
+    elif cmd in ["cancel", "abort", "إلغاء", "stop", "إيقاف", "close"]:
+        had_timer = False
+        if active_sleep_timer:
+            try:
+                active_sleep_timer.cancel()
+            except Exception:
+                pass
+            active_sleep_timer = None
+            active_sleep_details = None
+            had_timer = True
+
+        # Stop mpv player
+        kill_mpv()
+
+        # Cancel Windows shutdown if scheduled
         res = subprocess.run(["shutdown", "/a"], capture_output=True, text=True,
                              creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-        if res.returncode == 0:
+
+        if had_timer or res.returncode == 0:
             return {
                 "status": "success",
-                "message": "✅ تم إلغاء الإيقاف أو إعادة التشغيل المجدولة بنجاح!"
+                "message": "✅ تم إيقاف المشغل (mpv) وإلغاء موقت السكون المجدول بنجاح!"
             }
         else:
             return {
-                "status": "info",
-                "message": "ℹ️ لا يوجد إيقاف مجدول لإلغائه حالياً."
+                "status": "success",
+                "message": "✅ تم إغلاق المشغل والتأكد من عدم وجود أي موقت مجدول."
             }
 
     elif cmd in ["lock", "قفل"]:
@@ -197,11 +333,13 @@ def execute_action(action_type, param=None):
             "message": (
                 f"❓ أمر غير معروف: '{action_type}'\n\n"
                 "📌 الأوامر المدعومة:\n"
-                "• sleep (أو 'نوم') - وضع السكون\n"
+                "• sleep rain <مدة> - تشغيل Rain.mp4 ثم النوم بعد المدة (مثال: sleep rain 15min أو sleep rain 1h)\n"
+                "• messi - تشغيل فيديو Messi.mp4 في وضع ملء الشاشة والتكرار (Fullscreen + Loop)\n"
+                "• stop (أو cancel) - إغلاق مشغل الفيديو وإلغاء أي موقت مجدول\n"
+                "• sleep (أو 'نوم') - وضع السكون المباشر\n"
                 "• hibernate (أو 'سبات') - الإسبات\n"
                 "• shutdown (أو 'طفي') - إيقاف التشغيل (10 ثوان)\n"
                 "• restart (أو 'إعادة تشغيل') - إعادة التشغيل\n"
-                "• cancel (أو 'إلغاء') - إلغاء الإيقاف المجدول\n"
                 "• lock (أو 'قفل') - قفل الشاشة\n"
                 "• mute (أو 'كتم') - تبديل كتم الصوت\n"
                 "• status (أو 'حالة') - فحص الاتصال ومعلومات الجهاز\n"
