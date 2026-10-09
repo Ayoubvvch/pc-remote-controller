@@ -16,10 +16,26 @@ import socket
 import urllib.parse
 from datetime import datetime
 
-# Ensure safe utf-8 stdout on Windows
-if sys.platform == 'win32':
+# Ensure safe stdout/stderr on Windows (especially when run via pythonw.exe)
+log_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.log")
+if sys.stdout is None:
+    try:
+        sys.stdout = open(log_file_path, "a", encoding="utf-8", buffering=1)
+    except Exception:
+        pass
+elif sys.platform == 'win32':
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
+if sys.stderr is None:
+    try:
+        sys.stderr = open(log_file_path, "a", encoding="utf-8", buffering=1)
+    except Exception:
+        pass
+elif sys.platform == 'win32':
+    try:
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     except Exception:
         pass
@@ -257,8 +273,13 @@ class RemoteHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        # Clean logging
-        sys.stdout.write(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]} - {args[1]} {args[2]}\n")
+        try:
+            msg = f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]} - {args[1]} {args[2]}\n"
+            if sys.stdout:
+                sys.stdout.write(msg)
+                sys.stdout.flush()
+        except Exception:
+            pass
 
 def run():
     server_address = ("0.0.0.0", PORT)
