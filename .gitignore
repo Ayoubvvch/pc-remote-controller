@@ -11,3 +11,6 @@
 local.properties
 __pycache__/
 *.pyc
+*.log
+screenshots/
+server/screenshots/

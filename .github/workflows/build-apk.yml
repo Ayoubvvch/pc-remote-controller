@@ -31,26 +31,27 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Rename APK for release
-        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.1.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.2.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PCRemote-APK
-          path: PCRemote-v1.1.apk
+          path: PCRemote-v1.2.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.1.0
-          name: "PC Remote App v1.1.0"
+          tag_name: v1.2.0
+          name: "PC Remote App v1.2.0"
           body: |
-            ### 🚀 PC Remote Control Android App (Release v1.1.0)
-            - 🔊 اختصارات سريعة للتحكم المباشر في الصوت (s 15, s 25, s 40).
-            - 🌧️ وضع تشغيل المطر مع تصغير كافة النوافذ (Desktop فقط).
-            - 🐐 زر سريع لتشغيل فيديو Messi.
-            - ⚡ أزرار سريعة في الشريط العلوي لتسهيل التحكم بضغطة زر واحدة.
-          files: PCRemote-v1.1.apk
+            ### 🚀 PC Remote Control Android App (Release v1.2.0)
+            - 📸 **لقطة شاشة (Screenshot):** التقاط شاشة الحاسوب وعرضها في المحادثة مباشرة مع معاينة بالحجم الكامل.
+            - 📁 **إرسال الملفات والصور:** إرسال أي صورة أو مستند أو ملف من الهاتف إلى مجلد التنزيلات (Downloads) في الحاسوب فوراً.
+            - 💤 **جدولة السكون:** دعم أوامر مثل `sleep 15` و `sleep 30`.
+            - 🛡️ **تأكيد الأمان:** حماية الأوامر الحساسة (shutdown, restart, sleep) بنظام تأكيد (yes / no).
+            - ⚡ **أزرار سريعة:** إضافة زر 📸 لقطة شاشة وزر 📎 لإرفاق الملفات.
+          files: PCRemote-v1.2.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

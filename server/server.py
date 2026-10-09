@@ -15,6 +15,7 @@ import time
 import socket
 import urllib.parse
 import re
+import base64
 from datetime import datetime
 
 # Ensure safe stdout/stderr on Windows (especially when run via pythonw.exe)
@@ -142,6 +143,72 @@ def toggle_system_mute():
     except Exception:
         pass
     return None
+
+# Screenshot & Download Paths
+SCREENSHOT_EXE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshot.exe")
+SCREENSHOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
+DOWNLOADS_DIR = os.path.join(os.path.expanduser("~"), "Downloads")
+
+def format_size(num_bytes):
+    """Formats bytes into readable string."""
+    if num_bytes >= 1024 * 1024 * 1024:
+        return f"{num_bytes / (1024 * 1024 * 1024):.2f} GB"
+    elif num_bytes >= 1024 * 1024:
+        return f"{num_bytes / (1024 * 1024):.1f} MB"
+    elif num_bytes >= 1024:
+        return f"{num_bytes / 1024:.1f} KB"
+    else:
+        return f"{num_bytes} B"
+
+def take_screenshot():
+    """Captures the PC screen and returns the image details."""
+    try:
+        os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+        filename = f"ss_{int(time.time())}.jpg"
+        filepath = os.path.join(SCREENSHOTS_DIR, filename)
+
+        if not os.path.exists(SCREENSHOT_EXE):
+            return {
+                "status": "error",
+                "message": "❌ أداة التقاط الشاشة (screenshot.exe) غير متوفرة."
+            }
+
+        res = subprocess.run([SCREENSHOT_EXE, filepath], capture_output=True, text=True,
+                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+
+        if res.returncode == 0 and os.path.exists(filepath):
+            # Clean up old screenshots (keep latest 8)
+            try:
+                files = [os.path.join(SCREENSHOTS_DIR, f) for f in os.listdir(SCREENSHOTS_DIR) if f.startswith("ss_") and f.endswith(".jpg")]
+                files.sort(key=os.path.getmtime)
+                if len(files) > 8:
+                    for old_file in files[:-8]:
+                        try:
+                            os.remove(old_file)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            file_size = os.path.getsize(filepath)
+            return {
+                "status": "success",
+                "type": "image",
+                "image_url": f"/screenshot/{filename}",
+                "filename": filename,
+                "message": f"📸 تم التقاط لقطة شاشة للحاسوب بنجاح! ({format_size(file_size)})"
+            }
+        else:
+            err_msg = res.stderr.strip() or res.stdout.strip() or "فشل غير معروف"
+            return {
+                "status": "error",
+                "message": f"❌ تعذر التقاط الشاشة: {err_msg}"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"❌ خطأ أثناء التقاط الشاشة: {str(e)}"
+        }
 
 def execute_action(action_type, param=None):
     """Executes the requested action safely and returns a response message."""
@@ -537,12 +604,17 @@ def execute_action(action_type, param=None):
         except Exception as e:
             return {"status": "error", "message": f"❌ تعذر الفتح: {str(e)}"}
 
+    elif cmd in ["screenshot", "ss", "screen", "capture", "لقطة", "لقطة شاشة", "شاشة", "صورة الشاشة"]:
+        return take_screenshot()
+
     else:
         return {
             "status": "unknown",
             "message": (
                 f"❓ أمر غير معروف: '{action_type}'\n\n"
                 "📌 الأوامر المدعومة:\n"
+                "• screenshot (أو ss) - التقاط لقطة شاشة للحاسوب وإرسالها للمحادثة فوراً\n"
+                "• إرسال ملفات/صور - أرسل أي ملف ليحفظ مباشرة في مجلد Downloads\n"
                 "• sleep rain <مدة> - تشغيل Rain.mp4 في وضع ملء الشاشة (مثال: sleep rain 15min)\n"
                 "• sleep rain <مدة> min - تشغيل Rain.mp4 مع تصغير كل النوافذ ليبقى الديسكتوب فقط\n"
                 "• s <0-100> (أو sound) - ضبط مستوى صوت الحاسوب (مثال: s 15 أو s 40)\n"
@@ -564,7 +636,7 @@ class RemoteHandler(http.server.BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Filename, X-Filename-B64")
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -582,13 +654,120 @@ class RemoteHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+        elif parsed.path.startswith("/screenshot/"):
+            filename = os.path.basename(parsed.path.replace("/screenshot/", "").strip())
+            filepath = os.path.join(SCREENSHOTS_DIR, filename)
+            if os.path.exists(filepath) and os.path.isfile(filepath):
+                try:
+                    file_size = os.path.getsize(filepath)
+                    self.send_response(200)
+                    self._send_cors_headers()
+                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Content-Length", str(file_size))
+                    self.send_header("Cache-Control", "no-cache")
+                    self.end_headers()
+                    with open(filepath, "rb") as f:
+                        while True:
+                            chunk = f.read(65536)
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                except Exception:
+                    pass
+            else:
+                self.send_response(404)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path in ["/command", "/api/command", "/"]:
+        if parsed.path in ["/upload", "/api/upload"]:
+            try:
+                os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+                raw_filename = ""
+                
+                # Check base64 header first (preserves Arabic and special chars)
+                b64_name = self.headers.get("X-Filename-B64")
+                if b64_name:
+                    try:
+                        raw_filename = base64.b64decode(b64_name).decode("utf-8")
+                    except Exception:
+                        pass
+                
+                if not raw_filename:
+                    raw_name = self.headers.get("X-Filename", "")
+                    if raw_name:
+                        raw_filename = urllib.parse.unquote(raw_name)
+
+                # Fallback if no filename provided
+                if not raw_filename or not raw_filename.strip():
+                    content_type = self.headers.get("Content-Type", "")
+                    ext = ".bin"
+                    if "image/jpeg" in content_type: ext = ".jpg"
+                    elif "image/png" in content_type: ext = ".png"
+                    elif "application/pdf" in content_type: ext = ".pdf"
+                    raw_filename = f"upload_{int(time.time())}{ext}"
+
+                # Sanitize filename (prevent path traversal)
+                safe_filename = os.path.basename(raw_filename.strip()).replace("/", "").replace("\\", "")
+                if not safe_filename:
+                    safe_filename = f"upload_{int(time.time())}.bin"
+
+                # Handle duplicate filenames in Downloads
+                base_name, ext = os.path.splitext(safe_filename)
+                target_path = os.path.join(DOWNLOADS_DIR, safe_filename)
+                counter = 1
+                while os.path.exists(target_path):
+                    safe_filename = f"{base_name} ({counter}){ext}"
+                    target_path = os.path.join(DOWNLOADS_DIR, safe_filename)
+                    counter += 1
+
+                content_len = int(self.headers.get("Content-Length", 0))
+                bytes_received = 0
+                
+                with open(target_path, "wb") as out_file:
+                    while bytes_received < content_len:
+                        chunk_size = min(65536, content_len - bytes_received)
+                        chunk = self.rfile.read(chunk_size)
+                        if not chunk:
+                            break
+                        out_file.write(chunk)
+                        bytes_received += len(chunk)
+
+                size_str = format_size(bytes_received)
+                print(f"[UPLOAD] Saved '{safe_filename}' ({size_str}) to {DOWNLOADS_DIR}")
+
+                response_data = {
+                    "status": "success",
+                    "filename": safe_filename,
+                    "size": bytes_received,
+                    "path": target_path,
+                    "message": f"📥 تم استلام الملف بنجاح وحفظه في مجلد التنزيلات (Downloads):\n📁 {safe_filename} ({size_str})"
+                }
+                body = json.dumps(response_data, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self._send_cors_headers()
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            except Exception as ex:
+                err_data = {
+                    "status": "error",
+                    "message": f"❌ فشل حفظ الملف المرسل: {str(ex)}"
+                }
+                body = json.dumps(err_data, ensure_ascii=False).encode("utf-8")
+                self.send_response(500)
+                self._send_cors_headers()
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        elif parsed.path in ["/command", "/api/command", "/"]:
             content_len = int(self.headers.get("Content-Length", 0))
             post_body = self.rfile.read(content_len).decode("utf-8").strip()
             

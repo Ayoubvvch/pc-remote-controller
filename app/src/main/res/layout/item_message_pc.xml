@@ -38,6 +38,34 @@
             android:lineSpacingExtra="3dp"
             android:textIsSelectable="true" />
 
+        <!-- Screenshot Image Container -->
+        <FrameLayout
+            android:id="@+id/layoutImageContainer"
+            android:layout_width="260dp"
+            android:layout_height="170dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/ivScreenshot"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:adjustViewBounds="true"
+                android:background="#1A1D27"
+                android:clickable="true"
+                android:contentDescription="Screenshot"
+                android:focusable="true"
+                android:scaleType="centerCrop" />
+
+            <ProgressBar
+                android:id="@+id/pbImageLoading"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:indeterminateTint="@color/accent" />
+        </FrameLayout>
+
         <TextView
             android:id="@+id/tvTime"
             android:layout_width="wrap_content"

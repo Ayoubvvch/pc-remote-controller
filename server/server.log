@@ -75,3 +75,89 @@ Ready to receive commands from your Android app!
 [04:00:10] GET /ping HTTP/1.1 - 200 -
 [RECV] Command: 'sleep' from 192.168.11.233
 [04:00:14] POST /command HTTP/1.1 - 200 -
+============================================================
+🚀 PC Remote Control Server is RUNNING on port 5050
+📡 Connect from your phone at any of these URLs:
+   👉 http://192.168.11.104:5050
+   👉 http://192.168.11.109:5050
+============================================================
+Ready to receive commands from your Android app!
+[RECV] Command: 's 15' from 192.168.11.233
+[09:36:44] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'm' from 192.168.11.233
+[09:37:40] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[09:38:15] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sleep rain 15m minimized' from 192.168.11.233
+[09:38:59] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[09:39:54] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sr 15m min' from 192.168.11.233
+[09:40:24] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[09:40:43] POST /command HTTP/1.1 - 200 -
+[12:58:56] GET /ping HTTP/1.1 - 200 -
+[RECV] Command: 'messi' from 192.168.11.233
+[12:59:05] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 's30' from 192.168.11.233
+[12:59:11] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 's50' from 192.168.11.233
+[12:59:14] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 's45' from 192.168.11.233
+[12:59:19] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 's30' from 192.168.11.233
+[12:59:22] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[12:59:40] POST /command HTTP/1.1 - 200 -
+============================================================
+🚀 PC Remote Control Server is RUNNING on port 5050
+📡 Connect from your phone at any of these URLs:
+   👉 http://192.168.11.104:5050
+   👉 http://192.168.11.109:5050
+============================================================
+Ready to receive commands from your Android app!
+[13:07:57] GET /ping HTTP/1.1 - 200 -
+[RECV] Command: '{" command\: \sleep 15\}' from 192.168.11.233
+[13:08:10] POST /command HTTP/1.1 - 200 -
+[RECV] Command: '{command:sleep 15}' from 192.168.11.233
+[13:09:01] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sleep 15' from 192.168.11.233
+[13:09:11] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'cancel' from 192.168.11.233
+[13:09:18] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sleep 30' from 127.0.0.1
+[13:09:29] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'cancel' from 127.0.0.1
+[13:09:37] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'shutdown' from 127.0.0.1
+[13:09:44] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'shutdown' from 127.0.0.1
+[13:09:53] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'no' from 127.0.0.1
+[13:10:00] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'yes' from 127.0.0.1
+[13:10:08] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sleep' from 127.0.0.1
+[13:10:16] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'no' from 127.0.0.1
+[13:10:24] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'status' from 127.0.0.1
+[13:10:32] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'cmd C:\Users\chyad\.gemini\antigravity\scratch\pc-remote\server\screenshot.exe C:\Users\chyad\.gemini\antigravity\scratch\pc-remote\server\test_from_server.jpg' from 127.0.0.1
+[13:34:12] POST /command HTTP/1.1 - 200 -
+============================================================
+🚀 PC Remote Control Server is RUNNING on port 5050
+📡 Connect from your phone at any of these URLs:
+   👉 http://192.168.11.104:5050
+   👉 http://192.168.11.109:5050
+============================================================
+Ready to receive commands from your Android app!
+[RECV] Command: 'screenshot' from 127.0.0.1
+[13:40:54] POST /command HTTP/1.1 - 200 -
+[13:41:15] GET /screenshot/ss_1791553254.jpg HTTP/1.1 - 200 -
+[13:42:08] HEAD /screenshot/ss_1791553254.jpg HTTP/1.1 - 501 -
+[13:42:41] GET /screenshot/ss_1791553254.jpg HTTP/1.1 - 200 -
+[UPLOAD] Saved 'test_doc.txt' (57 B) to C:\Users\chyad\Downloads
+[13:43:22] POST /upload HTTP/1.1 - 200 -
+[UPLOAD] Saved 'test_doc (1).txt' (57 B) to C:\Users\chyad\Downloads
+[13:43:55] POST /upload HTTP/1.1 - 200 -
