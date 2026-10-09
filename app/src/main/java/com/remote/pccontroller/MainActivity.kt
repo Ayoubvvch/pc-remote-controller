@@ -211,7 +211,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupQuickChips() {
-        findViewById<TextView>(R.id.chipClipboard)?.setOnClickListener { sendCommand("clip") }
+        findViewById<TextView>(R.id.chipClipboard)?.setOnClickListener { syncClipboardNow() }
         findViewById<TextView>(R.id.chipBrowseFiles)?.setOnClickListener { showFileBrowserDialog() }
         findViewById<TextView>(R.id.chipScreenshotAll)?.setOnClickListener { sendCommand("screenshot all") }
         findViewById<TextView>(R.id.chipScreenshot1)?.setOnClickListener { sendCommand("screenshot 1") }
@@ -236,6 +236,46 @@ class MainActivity : AppCompatActivity() {
             showConfirmationDialog("إيقاف التشغيل", "هل تريد بالتأكيد إيقاف تشغيل الحاسوب؟") {
                 sendCommand("shutdown")
             }
+        }
+    }
+
+    private fun syncClipboardNow() {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip
+        val phoneText = if (clip != null && clip.itemCount > 0) {
+            clip.getItemAt(0).coerceToText(this).toString()
+        } else {
+            ""
+        }
+
+        if (phoneText.isNotBlank()) {
+            addUserMessage("📋 مزامنة الحافظة من الهاتف إلى الحاسوب...")
+            val baseUrl = getBaseUrl()
+            val jsonPayload = JSONObject().apply {
+                put("text", phoneText)
+            }.toString()
+
+            val body = jsonPayload.toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder().url("$baseUrl/api/clipboard").post(body).build()
+
+            client.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    runOnUiThread {
+                        addPcMessage("❌ تعذر إرسال الحافظة للحاسوب: ${e.message}")
+                    }
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    response.close()
+                    runOnUiThread {
+                        val preview = if (phoneText.length > 50) phoneText.take(50) + "..." else phoneText
+                        addPcMessage("✅ تم نسخ نص الهاتف إلى حافظة الحاسوب بنجاح!\n\n📋 النص المنسوخ:\n$preview")
+                        Toast.makeText(this@MainActivity, "📋 تم نسخ الحافظة للحاسوب!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            })
+        } else {
+            sendCommand("clip")
         }
     }
 

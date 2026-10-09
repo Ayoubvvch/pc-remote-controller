@@ -21,14 +21,21 @@ class TransparentClipActivity : Activity() {
         .readTimeout(5, TimeUnit.SECONDS)
         .build()
 
+    private var handled = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Invisible transparent activity
+        val v = android.view.View(this)
+        v.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        setContentView(v)
     }
 
-    override fun onResume() {
-        super.onResume()
-        handleSendClipboard()
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && !handled) {
+            handled = true
+            handleSendClipboard()
+        }
     }
 
     private fun handleSendClipboard() {
