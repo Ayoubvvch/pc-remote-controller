@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">PC Remote</string>
+    <string name="connecting">جاري الاتصال...</string>
+    <string name="online">متصل</string>
+    <string name="offline">غير متصل</string>
+    <string name="type_a_command">اكتب أمراً (مثل: sleep)...</string>
+    <string name="settings">الإعدادات</string>
+    <string name="save">حفظ</string>
+    <string name="cancel">إلغاء</string>
+    <string name="pc_ip_address">عنوان IP الخاص بالحاسوب</string>
+    <string name="port">المنفذ (Port)</string>
+    <string name="test_connection">اختبار الاتصال</string>
+</resources>
