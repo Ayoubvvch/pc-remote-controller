@@ -139,8 +139,25 @@ class MainActivity : AppCompatActivity() {
         // Check connection on start
         checkConnection()
 
+        // Auto-grant root permissions & start persistent background service
+        RootUtil.autoGrantAllPermissions(this)
+        startRemoteBackgroundService()
+
         // Handle incoming share if app was opened via Share Sheet
         handleIncomingShareIntent(intent)
+    }
+
+    private fun startRemoteBackgroundService() {
+        try {
+            val serviceIntent = Intent(this, RemoteService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -194,6 +211,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupQuickChips() {
+        findViewById<TextView>(R.id.chipClipboard)?.setOnClickListener { sendCommand("clip") }
         findViewById<TextView>(R.id.chipBrowseFiles)?.setOnClickListener { showFileBrowserDialog() }
         findViewById<TextView>(R.id.chipScreenshotAll)?.setOnClickListener { sendCommand("screenshot all") }
         findViewById<TextView>(R.id.chipScreenshot1)?.setOnClickListener { sendCommand("screenshot 1") }
@@ -705,6 +723,10 @@ class MainActivity : AppCompatActivity() {
                         .apply()
                     Toast.makeText(this, "تم حفظ الإعدادات", Toast.LENGTH_SHORT).show()
                     checkConnection()
+                    try {
+                        stopService(Intent(this, RemoteService::class.java))
+                        startRemoteBackgroundService()
+                    } catch (ignored: Exception) {}
                 }
             }
             .setNegativeButton("إلغاء", null)

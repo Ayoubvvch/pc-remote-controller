@@ -64,6 +64,118 @@ active_sleep_timer = None
 active_sleep_details = None
 pending_confirmation = None
 
+# ---------------- Windows Clipboard Synchronization ----------------
+import ctypes
+from ctypes import wintypes
+
+CF_UNICODETEXT = 13
+GMEM_MOVEABLE = 0x0002
+
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
+
+user32.OpenClipboard.argtypes = [wintypes.HWND]
+user32.OpenClipboard.restype = wintypes.BOOL
+
+user32.CloseClipboard.argtypes = []
+user32.CloseClipboard.restype = wintypes.BOOL
+
+user32.EmptyClipboard.argtypes = []
+user32.EmptyClipboard.restype = wintypes.BOOL
+
+user32.GetClipboardData.argtypes = [wintypes.UINT]
+user32.GetClipboardData.restype = wintypes.HANDLE
+
+user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+user32.SetClipboardData.restype = wintypes.HANDLE
+
+kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+
+kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+kernel32.GlobalLock.restype = wintypes.LPVOID
+
+kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+kernel32.GlobalUnlock.restype = wintypes.BOOL
+
+def open_clipboard_retry(max_retries=10, delay=0.02):
+    for _ in range(max_retries):
+        if user32.OpenClipboard(None):
+            return True
+        time.sleep(delay)
+    return False
+
+def get_win_clipboard():
+    if not open_clipboard_retry():
+        return None
+    try:
+        handle = user32.GetClipboardData(CF_UNICODETEXT)
+        if not handle:
+            return ""
+        ptr = kernel32.GlobalLock(handle)
+        if not ptr:
+            return ""
+        try:
+            val = ctypes.c_wchar_p(ptr).value
+            return val if val is not None else ""
+        finally:
+            kernel32.GlobalUnlock(handle)
+    finally:
+        user32.CloseClipboard()
+
+def set_win_clipboard(text):
+    if text is None:
+        text = ""
+    if not open_clipboard_retry():
+        return False
+    try:
+        user32.EmptyClipboard()
+        raw = (text + '\0').encode('utf-16le')
+        hMem = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(raw))
+        if not hMem:
+            return False
+        ptr = kernel32.GlobalLock(hMem)
+        if not ptr:
+            return False
+        try:
+            ctypes.memmove(ptr, raw, len(raw))
+        finally:
+            kernel32.GlobalUnlock(hMem)
+        user32.SetClipboardData(CF_UNICODETEXT, hMem)
+        return True
+    finally:
+        user32.CloseClipboard()
+
+clipboard_lock = threading.Lock()
+clipboard_cond = threading.Condition(clipboard_lock)
+current_clipboard_text = ""
+clipboard_version = 1
+
+def win_clipboard_watcher():
+    global current_clipboard_text, clipboard_version
+    try:
+        init_txt = get_win_clipboard()
+        if init_txt is not None:
+            current_clipboard_text = init_txt
+    except Exception:
+        pass
+
+    while True:
+        try:
+            time.sleep(0.4)
+            txt = get_win_clipboard()
+            if txt is not None and txt != current_clipboard_text:
+                with clipboard_cond:
+                    current_clipboard_text = txt
+                    clipboard_version += 1
+                    clipboard_cond.notify_all()
+                preview = txt[:35].replace('\n', ' ').strip()
+                print(f"[CLIPBOARD] Windows clipboard updated (v{clipboard_version}, len={len(txt)}): '{preview}'")
+        except Exception:
+            pass
+
+threading.Thread(target=win_clipboard_watcher, daemon=True).start()
+
 def kill_mpv():
     """Closes any running mpv instances."""
     try:
@@ -714,6 +826,34 @@ def execute_action(action_type, param=None):
             )
         }
 
+    elif cmd in ["clip", "clipboard", "حافظة", "الحافظة", "getclip"]:
+        clip_txt = get_win_clipboard()
+        if clip_txt:
+            preview = clip_txt if len(clip_txt) <= 500 else clip_txt[:500] + "\n...(تم اقتطاع النص الطويل)"
+            return {
+                "status": "success",
+                "message": f"📋 محتوى حافظة الحاسوب:\n\n{preview}"
+            }
+        else:
+            return {
+                "status": "info",
+                "message": "📋 حافظة الحاسوب فارغة حالياً."
+            }
+
+    elif cmd.startswith("setclip ") or cmd.startswith("copy ") or cmd.startswith("نسخ "):
+        txt_to_set = action_type.split(" ", 1)[1] if " " in action_type else ""
+        if txt_to_set:
+            with clipboard_cond:
+                set_win_clipboard(txt_to_set)
+                current_clipboard_text = txt_to_set
+                clipboard_version += 1
+                clipboard_cond.notify_all()
+            return {
+                "status": "success",
+                "message": f"📋 تم نسخ النص إلى حافظة الحاسوب بنجاح:\n'{txt_to_set}'"
+            }
+        return {"status": "error", "message": "يرجى تحديد النص المراد نسخه."}
+
     else:
         return {
             "status": "unknown",
@@ -823,6 +963,31 @@ class RemoteHandler(http.server.BaseHTTPRequestHandler):
             else:
                 self.send_response(404)
                 self.end_headers()
+        elif parsed.path in ["/api/clipboard", "/clipboard"]:
+            params = urllib.parse.parse_qs(parsed.query)
+            try:
+                client_version = int(params.get("version", [0])[0])
+            except Exception:
+                client_version = 0
+            try:
+                wait_timeout = min(30, max(0, int(params.get("wait", [0])[0])))
+            except Exception:
+                wait_timeout = 0
+            
+            with clipboard_cond:
+                if client_version < clipboard_version or wait_timeout == 0:
+                    data = {"version": clipboard_version, "text": current_clipboard_text}
+                else:
+                    clipboard_cond.wait(timeout=wait_timeout)
+                    data = {"version": clipboard_version, "text": current_clipboard_text}
+            
+            body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_response(404)
             self.end_headers()
@@ -943,6 +1108,46 @@ class RemoteHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        elif parsed.path in ["/api/clipboard", "/clipboard"]:
+            content_len = int(self.headers.get("Content-Length", 0))
+            post_body = self.rfile.read(content_len).decode("utf-8").strip()
+            new_text = ""
+            global current_clipboard_text, clipboard_version
+            try:
+                payload = json.loads(post_body)
+                if isinstance(payload, dict):
+                    new_text = payload.get("text", "") or payload.get("clip", "")
+                elif isinstance(payload, str):
+                    new_text = payload
+            except Exception:
+                new_text = post_body
+
+            success = False
+            with clipboard_cond:
+                if new_text != current_clipboard_text:
+                    success = set_win_clipboard(new_text)
+                    current_clipboard_text = new_text
+                    clipboard_version += 1
+                    clipboard_cond.notify_all()
+                    preview = new_text[:35].replace('\n', ' ').strip()
+                    print(f"[CLIPBOARD] Phone -> PC set clipboard (v{clipboard_version}, len={len(new_text)}): '{preview}'")
+                else:
+                    success = True
+
+            resp = {
+                "status": "success" if success else "error",
+                "version": clipboard_version,
+                "message": "✅ تم نسخ النص إلى حافظة الحاسوب بنجاح" if success else "❌ تعذر تعيين الحافظة"
+            }
+            body = json.dumps(resp, ensure_ascii=False).encode("utf-8")
+            self.send_response(200 if success else 500)
+            self._send_cors_headers()
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         else:
             self.send_response(404)
             self.end_headers()
