@@ -3,6 +3,8 @@ package com.remote.pccontroller
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.BitmapFactory

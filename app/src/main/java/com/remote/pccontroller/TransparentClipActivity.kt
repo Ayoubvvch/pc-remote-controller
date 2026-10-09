@@ -4,7 +4,9 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Color
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
