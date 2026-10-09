@@ -31,26 +31,26 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Rename APK for release
-        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.3.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.4.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PCRemote-APK
-          path: PCRemote-v1.3.apk
+          path: PCRemote-v1.4.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.3.0
-          name: "PC Remote App v1.3.0"
+          tag_name: v1.4.0
+          name: "PC Remote App v1.4.0"
           body: |
-            ### 🚀 PC Remote Control Android App (Release v1.3.0)
+            ### 🚀 PC Remote Control Android App (Release v1.4.0)
+            - 📲 **الظهور في قائمة المشاركة (Android Share Sheet Integration):** يمكنك الآن مشاركة أي صورة أو فيديو أو مستند أو رابط من أي تطبيق في هاتفك (Gallery, WhatsApp, Files, Browser) مباشرة إلى PC Remote ليتم إرساله وحفظه في مجلد Downloads بالحاسوب فوراً!
             - 📁 **متصفح وسحب ملفات الحاسوب (PC File Explorer):** تصفح كافة أقراص ومجلدات الحاسوب (C, D, F, Downloads, Desktop) وسحب/تنزيل أي ملف إلى الهاتف بضغطة زر واحدة.
-            - 🖥️ **دعم تصوير الشاشات المتعددة (Multi-Monitor Screenshot):** التقاط الشاشتين معاً في صورة بانورامية كاملة، أو التقاط الشاشة الأولى فقط أو الثانية بشكل مستقل.
-            - 📸 **أزرار مخصصة للشاشات:** أزرار سريعة لاختيار (الشاشتين، شاشة 1، شاشة 2).
-            - 📎 **إرسال واستقبال الملفات ثنائي الاتجاه بالكامل.**
-          files: PCRemote-v1.3.apk
+            - 🖥️ **دعم تصوير الشاشات المتعددة (Multi-Monitor Screenshot):** التقاط الشاشتين معاً في صورة بانورامية كاملة، أو الشاشة الأولى أو الثانية.
+            - 🎨 **أيقونة تطبيق مخصصة وجديدة بالكامل.**
+          files: PCRemote-v1.4.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

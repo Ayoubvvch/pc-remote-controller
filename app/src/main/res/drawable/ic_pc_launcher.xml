@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <path
+      android:fillColor="#0F1117"
+      android:pathData="M0,0h108v108h-108z"/>
+  <!-- Monitor frame -->
+  <path
+      android:fillColor="#6366F1"
+      android:pathData="M24,26h60c4.4,0 8,3.6 8,8v34c0,4.4 -3.6,8 -8,8h-60c-4.4,0 -8,-3.6 -8,-8v-34c0,-4.4 3.6,-8 8,-8z"/>
+  <!-- Screen inner -->
+  <path
+      android:fillColor="#161922"
+      android:pathData="M27,31h54v26h-54z"/>
+  <!-- Remote lightning symbol -->
+  <path
+      android:fillColor="#38BDF8"
+      android:pathData="M56,34l-9,11h7l-3,10l10,-12h-7z"/>
+  <!-- Monitor stand -->
+  <path
+      android:fillColor="#6366F1"
+      android:pathData="M50,76h8v7h-8z"/>
+  <path
+      android:fillColor="#6366F1"
+      android:pathData="M38,83h32c2.2,0 4,1.8 4,4v0h-40v0c0,-2.2 1.8,-4 4,-4z"/>
+</vector>

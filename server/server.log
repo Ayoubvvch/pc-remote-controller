@@ -189,3 +189,19 @@ Ready to receive commands from your Android app!
 [14:09:07] POST /upload HTTP/1.1 - 200 -
 [RECV] Command: 'cmd C:\Users\chyad\.gemini\antigravity\scratch\pc-remote\server\screenshot.exe C:\Users\chyad\.gemini\antigravity\scratch\pc-remote\server\test_multiscreen.jpg all' from 127.0.0.1
 [14:10:24] POST /command HTTP/1.1 - 200 -
+============================================================
+🚀 PC Remote Control Server is RUNNING on port 5050
+📡 Connect from your phone at any of these URLs:
+   👉 http://192.168.11.104:5050
+   👉 http://192.168.11.109:5050
+============================================================
+Ready to receive commands from your Android app!
+[14:18:25] GET /api/browse HTTP/1.1 - 200 -
+[14:19:01] GET /api/browse HTTP/1.1 - 200 -
+[14:19:31] GET /api/download?path=C:\Users\chyad\Downloads\2026-10-03-09-59-15-899.jpg HTTP/1.1 - 200 -
+[RECV] Command: 'screenshot' from 127.0.0.1
+[14:20:18] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'screenshot 1' from 127.0.0.1
+[14:20:44] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'screenshot 2' from 127.0.0.1
+[14:21:17] POST /command HTTP/1.1 - 200 -

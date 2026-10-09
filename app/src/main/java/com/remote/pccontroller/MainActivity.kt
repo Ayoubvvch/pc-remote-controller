@@ -3,6 +3,7 @@ package com.remote.pccontroller
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -137,6 +138,59 @@ class MainActivity : AppCompatActivity() {
 
         // Check connection on start
         checkConnection()
+
+        // Handle incoming share if app was opened via Share Sheet
+        handleIncomingShareIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingShareIntent(intent)
+    }
+
+    private fun handleIncomingShareIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action ?: return
+
+        if (Intent.ACTION_SEND == action) {
+            val uri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            }
+
+            if (uri != null) {
+                Toast.makeText(this, "🚀 جاري إرسال الملف المشارك إلى الحاسوب...", Toast.LENGTH_SHORT).show()
+                uploadFileToPc(uri)
+            } else {
+                val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                if (!sharedText.isNullOrBlank()) {
+                    val trimmed = sharedText.trim()
+                    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                        Toast.makeText(this, "🌐 فتح الرابط في متصفح الحاسوب...", Toast.LENGTH_SHORT).show()
+                        sendCommand("open $trimmed")
+                    } else {
+                        sendCommand(trimmed)
+                    }
+                }
+            }
+        } else if (Intent.ACTION_SEND_MULTIPLE == action) {
+            val uris = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+            }
+
+            if (!uris.isNullOrEmpty()) {
+                Toast.makeText(this, "🚀 جاري إرسال ${uris.size} ملفات مشاركة إلى الحاسوب...", Toast.LENGTH_SHORT).show()
+                for (u in uris) {
+                    uploadFileToPc(u)
+                }
+            }
+        }
     }
 
     private fun setupQuickChips() {
