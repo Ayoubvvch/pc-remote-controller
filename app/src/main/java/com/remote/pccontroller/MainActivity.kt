@@ -99,18 +99,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupQuickChips() {
-        findViewById<TextView>(R.id.chipSleep).setOnClickListener { sendCommand("sleep") }
-        findViewById<TextView>(R.id.chipLock).setOnClickListener { sendCommand("lock") }
-        findViewById<TextView>(R.id.chipHibernate).setOnClickListener { sendCommand("hibernate") }
-        findViewById<TextView>(R.id.chipStatus).setOnClickListener { sendCommand("status") }
-        findViewById<TextView>(R.id.chipMute).setOnClickListener { sendCommand("mute") }
-        findViewById<TextView>(R.id.chipCancel).setOnClickListener { sendCommand("cancel") }
-        findViewById<TextView>(R.id.chipRestart).setOnClickListener {
+        findViewById<TextView>(R.id.chipMessi)?.setOnClickListener { sendCommand("messi") }
+        findViewById<TextView>(R.id.chipRain)?.setOnClickListener { sendCommand("sleep rain 15min") }
+        findViewById<TextView>(R.id.chipRainMin)?.setOnClickListener { sendCommand("sleep rain 15m min") }
+        findViewById<TextView>(R.id.chipVol15)?.setOnClickListener { sendCommand("s 15") }
+        findViewById<TextView>(R.id.chipVol25)?.setOnClickListener { sendCommand("s 25") }
+        findViewById<TextView>(R.id.chipVol40)?.setOnClickListener { sendCommand("s 40") }
+        findViewById<TextView>(R.id.chipMute)?.setOnClickListener { sendCommand("mute") }
+        findViewById<TextView>(R.id.chipSleep)?.setOnClickListener { sendCommand("sleep") }
+        findViewById<TextView>(R.id.chipLock)?.setOnClickListener { sendCommand("lock") }
+        findViewById<TextView>(R.id.chipStatus)?.setOnClickListener { sendCommand("status") }
+        findViewById<TextView>(R.id.chipCancel)?.setOnClickListener { sendCommand("stop") }
+        findViewById<TextView>(R.id.chipRestart)?.setOnClickListener {
             showConfirmationDialog("إعادة التشغيل", "هل تريد بالتأكيد إعادة تشغيل الحاسوب؟") {
                 sendCommand("restart")
             }
         }
-        findViewById<TextView>(R.id.chipShutdown).setOnClickListener {
+        findViewById<TextView>(R.id.chipShutdown)?.setOnClickListener {
             showConfirmationDialog("إيقاف التشغيل", "هل تريد بالتأكيد إيقاف تشغيل الحاسوب؟") {
                 sendCommand("shutdown")
             }

@@ -14,6 +14,7 @@ import threading
 import time
 import socket
 import urllib.parse
+import re
 from datetime import datetime
 
 # Ensure safe stdout/stderr on Windows (especially when run via pythonw.exe)
@@ -199,7 +200,9 @@ def execute_action(action_type, param=None):
             "message": "🔄 سيتم إعادة تشغيل الحاسوب خلال 10 ثوانٍ.\nأرسل 'cancel' لإلغاء الإعادة."
         }
 
-    elif cmd.startswith("sleep rain") or cmd == "sleep rain" or cmd.startswith("rain "):
+    elif (cmd.startswith("sleep rain") or cmd == "sleep rain" or 
+          cmd.startswith("rain") or cmd.startswith("sr ") or cmd == "sr" or
+          cmd.startswith("srm ") or cmd == "srm"):
         # Cancel any previous sleep timer
         if active_sleep_timer:
             try:
@@ -208,8 +211,22 @@ def execute_action(action_type, param=None):
                 pass
             active_sleep_timer = None
 
+        # Check if minimized desktop mode is requested
+        is_minimized = (
+            "minimized" in cmd or 
+            "minimize" in cmd or 
+            "min" in cmd or 
+            "مصغر" in cmd or 
+            "مخفي" in cmd or 
+            cmd.startswith("srm")
+        )
+
         # Parse duration (default 15 minutes)
-        dur_part = cmd.replace("sleep rain", "").replace("rain", "").strip()
+        cleaned = cmd
+        for word in ["sleep rain", "rain", "srm", "sr", "minimized", "minimize", "min", "مصغر", "مخفي"]:
+            cleaned = cleaned.replace(word, "")
+        dur_part = cleaned.strip()
+
         sec = parse_duration_seconds(dur_part, default_sec=15 * 60)
         dur_human = format_duration(sec)
 
@@ -225,10 +242,29 @@ def execute_action(action_type, param=None):
                 "message": f"❌ لم يتم العثور على ملف الفيديو: {RAIN_VIDEO}"
             }
 
-        # Launch mpv with Rain.mp4 in fullscreen and infinite loop
         mpv_exec = MPV_PATH if os.path.exists(MPV_PATH) else "mpv"
-        subprocess.Popen([mpv_exec, "--fs", "--loop-file=inf", RAIN_VIDEO],
-                         creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+
+        if is_minimized:
+            # Minimize all open windows so only the black desktop is shown
+            subprocess.run(["powershell", "-NoProfile", "-Command", "(New-Object -ComObject Shell.Application).MinimizeAll()"],
+                           creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            
+            # Launch mpv minimized in background
+            subprocess.Popen([mpv_exec, "--window-minimized=yes", "--loop-file=inf", RAIN_VIDEO],
+                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            
+            # Sweep again after 0.5s to ensure clean black desktop
+            def sweep_minimize():
+                time.sleep(0.5)
+                subprocess.run(["powershell", "-NoProfile", "-Command", "(New-Object -ComObject Shell.Application).MinimizeAll()"],
+                               creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            threading.Thread(target=sweep_minimize, daemon=True).start()
+            mode_desc = "مع تصغير كافة النوافذ (Desktop فقط)"
+        else:
+            # Standard fullscreen mode
+            subprocess.Popen([mpv_exec, "--fs", "--loop-file=inf", RAIN_VIDEO],
+                             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            mode_desc = "في وضع ملء الشاشة (Fullscreen + Loop)"
 
         # Setup sleep timer callback
         def on_rain_timer_done():
@@ -246,19 +282,19 @@ def execute_action(action_type, param=None):
         active_sleep_timer = threading.Timer(sec, on_rain_timer_done)
         active_sleep_timer.daemon = True
         active_sleep_timer.start()
-        active_sleep_details = {"name": "Rain Sleep", "seconds": sec, "text": dur_human, "start": time.time()}
+        active_sleep_details = {"name": "Rain Sleep", "seconds": sec, "text": dur_human, "start": time.time(), "minimized": is_minimized}
 
         return {
             "status": "success",
             "message": (
-                f"🌧️ تم تشغيل Rain.mp4 في وضع ملء الشاشة بصوت 28% (Fullscreen + Loop)!\n\n"
+                f"🌧️ تم تشغيل Rain.mp4 بصوت 28% {mode_desc}!\n\n"
                 f"⏱️ المدة المحددة: {dur_human}\n"
                 f"💤 سينام الحاسوب تلقائياً بعد انتهاء الوقت.\n"
                 f"💡 أرسل 'cancel' أو 'stop' لإلغاء الموقت وإغلاق الفيديو في أي وقت."
             )
         }
 
-    elif cmd in ["messi", "ميسي", "messi mp4", "messi.mp4"]:
+    elif cmd in ["messi", "ميسي", "m", "messi mp4", "messi.mp4"]:
         kill_mpv()
 
         # Set system volume to 16%
@@ -331,8 +367,8 @@ def execute_action(action_type, param=None):
             }
 
     elif (cmd.startswith("sound") or cmd.startswith("vol") or 
-          cmd.startswith("volume") or cmd.startswith("صوت")):
-        import re
+          cmd.startswith("volume") or cmd.startswith("صوت") or
+          cmd.startswith("s ") or cmd == "s" or bool(re.match(r"^s\d+$", cmd))):
         nums = re.findall(r"\d+", cmd)
         if nums:
             val = int(nums[0])
@@ -396,9 +432,10 @@ def execute_action(action_type, param=None):
             "message": (
                 f"❓ أمر غير معروف: '{action_type}'\n\n"
                 "📌 الأوامر المدعومة:\n"
-                "• sleep rain <مدة> - تشغيل Rain.mp4 بصوت 28% ثم النوم بعد المدة (مثال: sleep rain 15min)\n"
-                "• messi - تشغيل فيديو Messi.mp4 بصوت 16% في وضع ملء الشاشة والتكرار\n"
-                "• sound <0-100> - ضبط مستوى صوت الحاسوب (مثال: sound 25 أو sound 40)\n"
+                "• sleep rain <مدة> - تشغيل Rain.mp4 في وضع ملء الشاشة (مثال: sleep rain 15min)\n"
+                "• sleep rain <مدة> min - تشغيل Rain.mp4 مع تصغير كل النوافذ ليبقى الديسكتوب فقط\n"
+                "• s <0-100> (أو sound) - ضبط مستوى صوت الحاسوب (مثال: s 15 أو s 40)\n"
+                "• messi (أو m) - تشغيل فيديو Messi.mp4 بصوت 16% في وضع ملء الشاشة والتكرار\n"
                 "• stop (أو cancel) - إغلاق مشغل الفيديو وإلغاء أي موقت مجدول\n"
                 "• sleep (أو 'نوم') - وضع السكون المباشر\n"
                 "• hibernate (أو 'سبات') - الإسبات\n"

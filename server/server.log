@@ -53,3 +53,25 @@ Ready to receive commands from your Android app!
 [03:34:46] GET /ping HTTP/1.1 - 200 -
 [03:34:47] GET /ping HTTP/1.1 - 200 -
 [03:34:54] GET /ping HTTP/1.1 - 200 -
+============================================================
+🚀 PC Remote Control Server is RUNNING on port 5050
+📡 Connect from your phone at any of these URLs:
+   👉 http://192.168.11.110:5050
+   👉 http://192.168.11.109:5050
+============================================================
+Ready to receive commands from your Android app!
+[RECV] Command: 'sound 25' from 192.168.11.233
+[03:40:40] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sound 40' from 192.168.11.233
+[03:41:52] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'messi' from 192.168.11.233
+[03:42:47] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'stop' from 192.168.11.233
+[03:43:32] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'sleep rain 15min' from 192.168.11.233
+[03:43:54] POST /command HTTP/1.1 - 200 -
+[RECV] Command: 'cancel' from 192.168.11.233
+[03:44:37] POST /command HTTP/1.1 - 200 -
+[04:00:10] GET /ping HTTP/1.1 - 200 -
+[RECV] Command: 'sleep' from 192.168.11.233
+[04:00:14] POST /command HTTP/1.1 - 200 -

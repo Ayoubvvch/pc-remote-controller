@@ -31,25 +31,26 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Rename APK for release
-        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.0.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PCRemote-v1.1.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: PCRemote-APK
-          path: PCRemote-v1.0.apk
+          path: PCRemote-v1.1.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: v1.0.0
-          name: "PC Remote App v1.0.0"
+          tag_name: v1.1.0
+          name: "PC Remote App v1.1.0"
           body: |
-            ### 🚀 PC Remote Control Android App (Release v1.0.0)
-            - ⚡ تطبيق أندرويد خفيف وسريع للتحكم في الحاسوب عن بعد عبر الواي فاي.
-            - 💬 واجهة محادثة تفاعلية للتحكم بأوامر سريعة.
-            - 💤 يدعم: Sleep, Hibernate, Shutdown, Restart, Lock, Mute, Status.
-          files: PCRemote-v1.0.apk
+            ### 🚀 PC Remote Control Android App (Release v1.1.0)
+            - 🔊 اختصارات سريعة للتحكم المباشر في الصوت (s 15, s 25, s 40).
+            - 🌧️ وضع تشغيل المطر مع تصغير كافة النوافذ (Desktop فقط).
+            - 🐐 زر سريع لتشغيل فيديو Messi.
+            - ⚡ أزرار سريعة في الشريط العلوي لتسهيل التحكم بضغطة زر واحدة.
+          files: PCRemote-v1.1.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
